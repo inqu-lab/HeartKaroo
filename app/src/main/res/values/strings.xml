@@ -89,6 +89,12 @@
     <string name="mmp_60min_name">Best 60 min power</string>
     <string name="mmp_60min_description">Highest 60-minute mean power so far in this ride — closest single-number proxy for true FTP.</string>
 
+    <string name="optimal_cadence_name">Optimal cadence</string>
+    <string name="optimal_cadence_description">Within-ride best-efficiency cadence (RPM) — bins power+HR by cadence and reports the bucket with the highest watts-per-beat. Per-ride finals are persisted; the rolling mean shows on the Readiness screen. Reads — until at least two cadence bins have enough samples.</string>
+
+    <string name="readiness_cadence_fmt">Rolling optimal cadence: %1$d RPM  (%2$d rides)</string>
+    <string name="readiness_cadence_none">No optimal-cadence history yet — ride with a power meter and HR strap paired.</string>
+
     <string name="readiness_button">Take HRV readiness reading</string>
     <string name="readiness_title">HRV Readiness</string>
     <string name="readiness_body">Take a 2-minute resting reading with your H10 before clipping in. Compared against your rolling 7-day average to suggest whether to go hard or take it easy.\n\nSit still, breathe normally, and don\'t talk.</string>

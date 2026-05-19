@@ -31,6 +31,7 @@ No cloud, no Polar SDK, no network access.
 | Quadrant | `quadrant` | Coggan quadrant analysis (1-4) from power+cadence. |
 | Best 5 s / 1 min / 5 min / 20 min / 60 min power | `mmp_5s` / `mmp_1min` / `mmp_5min` / `mmp_20min` / `mmp_60min` | Highest mean power for that duration seen so far in the ride. |
 | VAM | `vam` | Vertical Ascent Meters per hour over the last 60 s of elevation gain. |
+| Optimal cadence | `optimal_cadence` | Within-ride best-efficiency cadence (W per beat). Persisted per-ride; rolling mean on the Readiness screen. |
 
 ### HRV (from the BLE strap)
 
@@ -196,8 +197,13 @@ app/src/main/kotlin/com/inqulab/heartkaroo/
 ├── climb/
 │   ├── VamCalculator.kt
 │   └── VamDataType.kt
+├── cadence/
+│   ├── OptimalCadenceCalculator.kt     Per-bin W/HR efficiency
+│   ├── OptimalCadenceStore.kt          SharedPreferences rolling history
+│   └── OptimalCadenceDataType.kt       Live optimal-cadence field
 ├── settings/
-│   └── RiderSettings.kt                FTP / CP / W′ / HRmax / weight prefs
+│   ├── RiderSettings.kt                FTP / CP / W′ / HRmax / weight prefs
+│   └── SettingsActivity.kt             Edit-rider-settings screen
 ├── readiness/
 │   ├── ReadinessStore.kt           SharedPreferences-backed baseline
 │   └── ReadinessActivity.kt        2-min resting RMSSD UI

@@ -230,4 +230,12 @@
         sampleRate="1000"
         unitName="W" />
 
+    <DataType
+        typeId="optimal_cadence"
+        displayName="@string/optimal_cadence_name"
+        description="@string/optimal_cadence_description"
+        graphical="false"
+        sampleRate="1000"
+        unitName="RPM" />
+
 </ExtensionInfo>
