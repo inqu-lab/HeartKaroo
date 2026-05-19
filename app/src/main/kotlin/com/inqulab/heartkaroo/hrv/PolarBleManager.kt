@@ -52,6 +52,34 @@ class PolarBleManager(private val context: Context) {
     val stressFlow: StateFlow<Float?> = _stressFlow.asStateFlow()
     private val stressCalculator = HRVStressCalculator()
 
+    private val _dfaAlpha1Flow = MutableStateFlow<Float?>(null)
+    val dfaAlpha1Flow: StateFlow<Float?> = _dfaAlpha1Flow.asStateFlow()
+    private val dfaCalculator = DfaAlpha1Calculator()
+
+    private val _sdnnFlow = MutableStateFlow<Float?>(null)
+    val sdnnFlow: StateFlow<Float?> = _sdnnFlow.asStateFlow()
+    private val sdnnCalculator = SdnnCalculator()
+
+    private val _pnn50Flow = MutableStateFlow<Float?>(null)
+    val pnn50Flow: StateFlow<Float?> = _pnn50Flow.asStateFlow()
+    private val pnn50Calculator = Pnn50Calculator()
+
+    private val _sd1Flow = MutableStateFlow<Float?>(null)
+    val sd1Flow: StateFlow<Float?> = _sd1Flow.asStateFlow()
+    private val _sd2Flow = MutableStateFlow<Float?>(null)
+    val sd2Flow: StateFlow<Float?> = _sd2Flow.asStateFlow()
+    private val _sd1Sd2RatioFlow = MutableStateFlow<Float?>(null)
+    val sd1Sd2RatioFlow: StateFlow<Float?> = _sd1Sd2RatioFlow.asStateFlow()
+    private val poincareCalculator = PoincareCalculator()
+
+    private val _respiratoryRateFlow = MutableStateFlow<Float?>(null)
+    val respiratoryRateFlow: StateFlow<Float?> = _respiratoryRateFlow.asStateFlow()
+    private val respiratoryRateCalculator = RespiratoryRateCalculator()
+
+    private val _ectopicRateFlow = MutableStateFlow<Float?>(null)
+    val ectopicRateFlow: StateFlow<Float?> = _ectopicRateFlow.asStateFlow()
+    private val ectopicDetector = EctopicDetector()
+
     fun startDeviceScan(onDevice: (BluetoothDevice) -> Unit): () -> Unit {
         val leScanner = bluetoothAdapter?.bluetoothLeScanner ?: return {}
         val seenAddresses = mutableSetOf<String>()
@@ -132,12 +160,29 @@ class PolarBleManager(private val context: Context) {
                 scope.trySend(BleEvent.Heartrate(parsed.bpm))
                 for (rr in parsed.rrIntervalsMs) {
                     calculator.addInterval(rr)
+                    dfaCalculator.addInterval(rr)
+                    sdnnCalculator.addInterval(rr)
+                    pnn50Calculator.addInterval(rr)
+                    poincareCalculator.addInterval(rr)
+                    respiratoryRateCalculator.addInterval(rr)
+                    ectopicDetector.addInterval(rr)
                 }
                 if (parsed.rrIntervalsMs.isNotEmpty() && calculator.hasData) {
                     val rmssd = calculator.getRmssd()
                     _rmssdFlow.value = rmssd
                     stressCalculator.addRmssd(rmssd)
                     _stressFlow.value = stressCalculator.getStressPct()
+                }
+                if (parsed.rrIntervalsMs.isNotEmpty()) {
+                    _dfaAlpha1Flow.value = dfaCalculator.getAlpha1()
+                    _sdnnFlow.value = sdnnCalculator.getSdnn()
+                    _pnn50Flow.value = pnn50Calculator.getPnn50()
+                    val pc = poincareCalculator.getResult()
+                    _sd1Flow.value = pc?.sd1
+                    _sd2Flow.value = pc?.sd2
+                    _sd1Sd2RatioFlow.value = pc?.ratio
+                    _respiratoryRateFlow.value = respiratoryRateCalculator.getBreathsPerMin()
+                    _ectopicRateFlow.value = ectopicDetector.getEventsPerMin()
                 }
             }
         }

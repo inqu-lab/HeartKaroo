@@ -21,4 +21,105 @@
         graphical="false"
         icon="@drawable/ic_hrv" />
 
+    <DataType
+        typeId="hrv_stress"
+        displayName="@string/hrv_stress_name"
+        description="@string/hrv_stress_description"
+        graphical="false"
+        unitName="%"
+        icon="@drawable/ic_hrv" />
+
+    <DataType
+        typeId="dfa_alpha1"
+        displayName="@string/dfa_alpha1_name"
+        description="@string/dfa_alpha1_description"
+        graphical="false"
+        icon="@drawable/ic_hrv" />
+
+    <DataType
+        typeId="hrv_sdnn"
+        displayName="@string/hrv_sdnn_name"
+        description="@string/hrv_sdnn_description"
+        graphical="false"
+        unitName="ms"
+        icon="@drawable/ic_hrv" />
+
+    <DataType
+        typeId="hrv_pnn50"
+        displayName="@string/hrv_pnn50_name"
+        description="@string/hrv_pnn50_description"
+        graphical="false"
+        unitName="%"
+        icon="@drawable/ic_hrv" />
+
+    <DataType
+        typeId="hrv_sd1"
+        displayName="@string/hrv_sd1_name"
+        description="@string/hrv_sd1_description"
+        graphical="false"
+        unitName="ms"
+        icon="@drawable/ic_hrv" />
+
+    <DataType
+        typeId="hrv_sd2"
+        displayName="@string/hrv_sd2_name"
+        description="@string/hrv_sd2_description"
+        graphical="false"
+        unitName="ms"
+        icon="@drawable/ic_hrv" />
+
+    <DataType
+        typeId="hrv_sd1_sd2_ratio"
+        displayName="@string/hrv_sd1_sd2_ratio_name"
+        description="@string/hrv_sd1_sd2_ratio_description"
+        graphical="false"
+        icon="@drawable/ic_hrv" />
+
+    <DataType
+        typeId="respiratory_rate"
+        displayName="@string/respiratory_rate_name"
+        description="@string/respiratory_rate_description"
+        graphical="false"
+        unitName="brpm"
+        icon="@drawable/ic_hrv" />
+
+    <DataType
+        typeId="ectopic_rate"
+        displayName="@string/ectopic_rate_name"
+        description="@string/ectopic_rate_description"
+        graphical="false"
+        unitName="/min"
+        icon="@drawable/ic_hrv" />
+
+    <DataType
+        typeId="pace_hr_decoupling"
+        displayName="@string/pa_hr_decoupling_name"
+        description="@string/pa_hr_decoupling_description"
+        graphical="false"
+        sampleRate="1000"
+        unitName="%" />
+
+    <DataType
+        typeId="efficiency_factor"
+        displayName="@string/efficiency_factor_name"
+        description="@string/efficiency_factor_description"
+        graphical="false"
+        sampleRate="1000" />
+
+    <DataType
+        typeId="w_prime_balance"
+        displayName="@string/w_prime_balance_name"
+        description="@string/w_prime_balance_description"
+        graphical="false"
+        sampleRate="1000"
+        unitName="J" />
+
+    <DataType
+        typeId="cardiac_pop_minute"
+        displayName="@string/cardiac_pop_name"
+        description="@string/cardiac_pop_description"
+        graphical="false"
+        sampleRate="1000"
+        unitName="min" />
+
 </ExtensionInfo>
