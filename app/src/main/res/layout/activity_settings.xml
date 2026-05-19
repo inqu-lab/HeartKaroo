@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_title"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:paddingBottom="4dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_body"
+            android:textSize="13sp"
+            android:lineSpacingMultiplier="1.2"
+            android:paddingBottom="16dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_ftp_label"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:paddingTop="8dp" />
+        <EditText
+            android:id="@+id/settings_ftp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:textSize="16sp"
+            android:autofillHints="ftp"
+            android:hint="@string/settings_ftp_hint" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_cp_label"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:paddingTop="12dp" />
+        <EditText
+            android:id="@+id/settings_cp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:textSize="16sp"
+            android:autofillHints="cp"
+            android:hint="@string/settings_cp_hint" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_wprime_label"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:paddingTop="12dp" />
+        <EditText
+            android:id="@+id/settings_wprime"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:textSize="16sp"
+            android:autofillHints="wprime"
+            android:hint="@string/settings_wprime_hint" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_hrmax_label"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:paddingTop="12dp" />
+        <EditText
+            android:id="@+id/settings_hrmax"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:textSize="16sp"
+            android:autofillHints="hrmax"
+            android:hint="@string/settings_hrmax_hint" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_weight_label"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:paddingTop="12dp" />
+        <EditText
+            android:id="@+id/settings_weight"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="numberDecimal"
+            android:textSize="16sp"
+            android:autofillHints="weight"
+            android:hint="@string/settings_weight_hint" />
+
+        <Button
+            android:id="@+id/settings_save"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="@string/settings_save" />
+
+        <Button
+            android:id="@+id/settings_reset"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/settings_reset"
+            style="?android:attr/buttonBarButtonStyle" />
+
+    </LinearLayout>
+
+</ScrollView>

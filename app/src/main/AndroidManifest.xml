@@ -35,6 +35,12 @@
             android:name=".readiness.ReadinessActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".settings.SettingsActivity"
+            android:exported="false"
+            android:label="@string/settings_title"
+            android:windowSoftInputMode="adjustResize" />
+
         <service
             android:name=".HeartKarooExtension"
             android:exported="true"

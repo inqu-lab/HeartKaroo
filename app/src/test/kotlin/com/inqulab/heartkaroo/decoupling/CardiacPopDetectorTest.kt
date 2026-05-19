@@ -60,11 +60,11 @@ class CardiacPopDetectorTest {
     @Test
     fun `null decoupling samples are ignored without breaking confirmation`() {
         val det = CardiacPopDetector(thresholdPct = 5.0, confirmMs = 10_000L)
-        var t = 0L
-        det.add(t, 6.0); t += 5_000L
-        det.add(t, null); t += 1_000L
-        det.add(t, 6.0); t += 5_000L
-        // 5 s + 5 s above threshold, with a null gap — should still confirm
+        // Above threshold at t=0, null gap, above threshold at t=11_000 — the
+        // null sample should not reset the confirmation timer.
+        det.add(0L, 6.0)
+        det.add(5_000L, null)
+        det.add(11_000L, 6.0)
         val mins = det.getPopMinutes()
         assertTrue("expected latch with null gap, got $mins", mins != null)
     }

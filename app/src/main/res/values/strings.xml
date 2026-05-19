@@ -48,6 +48,53 @@
     <string name="cardiac_pop_name">Cardiac pop @ min</string>
     <string name="cardiac_pop_description">Latches the minute mark at which Pw:Hr decoupling first sustained above 5% — the moment your aerobic ceiling broke. Reads — until the pop happens, then a constant value for the rest of the ride.</string>
 
+    <string name="aet_estimate_name">AeT estimate</string>
+    <string name="aet_estimate_description">Live aerobic-threshold power estimate (watts) — the power at which DFA α1 crosses 0.75 (Rogell et al., 2021). Updates as more α1 / power pairs accumulate; reads — until the regression has enough varied data. Persists across rides — the average is shown on the Readiness screen.</string>
+
+    <string name="readiness_aet_fmt">Rolling AeT estimate: %1$d W  (%2$d rides)</string>
+    <string name="readiness_aet_none">No AeT estimate yet — ride with DFA α1 enabled and the strap paired.</string>
+
+    <string name="variability_index_name">Variability Index</string>
+    <string name="variability_index_description">NP / AP — how spiky the ride is. 1.00 = perfectly steady, &gt; 1.10 = punchy / crit-style. Useful for separating "endurance ride" from "interval session" post-hoc.</string>
+
+    <string name="intensity_factor_name">Intensity Factor</string>
+    <string name="intensity_factor_description">Coggan Intensity Factor — NP divided by your FTP. 0.65 = endurance, 0.85 = sweet-spot, 1.00 = at threshold. Default FTP 270 W — adjust in settings.</string>
+
+    <string name="tss_name">Training Stress Score</string>
+    <string name="tss_description">Live cumulative Training Stress Score. TSS = hours × IF² × 100. Builds through the ride; 100 = a one-hour all-out FTP effort.</string>
+
+    <string name="kilojoules_name">Kilojoules</string>
+    <string name="kilojoules_description">Cumulative mechanical work done, integrated from the power stream. Approximately equal to dietary Calories burned at typical cycling efficiency.</string>
+
+    <string name="coasting_pct_name">Coasting %</string>
+    <string name="coasting_pct_description">Percentage of ride time spent at &lt;5 W (freewheeling). Most riders coast more than they think.</string>
+
+    <string name="quadrant_name">Quadrant</string>
+    <string name="quadrant_description">Coggan quadrant analysis from power + cadence. 1 = aerobic, 2 = grinder (high force, low cadence), 3 = recovery, 4 = spinning. Reports the dominant quadrant over the last 60 s.</string>
+
+    <string name="vam_name">VAM</string>
+    <string name="vam_description">Vertical Ascent Meters per hour — the standard climbing-speed metric. Computed over the last 60 s of elevation gain.</string>
+
+    <string name="cardiac_cost_name">Cardiac cost</string>
+    <string name="cardiac_cost_description">Average HR per watt over the last 30 min — the inverse of Efficiency Factor, expressed as bpm/W. Lower is more efficient. Same information as EF but with a more intuitive scale.</string>
+
+    <string name="mmp_5s_name">Best 5 s power</string>
+    <string name="mmp_5s_description">Highest 5-second mean power achieved so far in this ride. Sprint capacity indicator.</string>
+    <string name="mmp_1min_name">Best 1 min power</string>
+    <string name="mmp_1min_description">Highest 1-minute mean power so far in this ride. Anaerobic / VO₂max capacity.</string>
+    <string name="mmp_5min_name">Best 5 min power</string>
+    <string name="mmp_5min_description">Highest 5-minute mean power so far in this ride. VO₂max region.</string>
+    <string name="mmp_20min_name">Best 20 min power</string>
+    <string name="mmp_20min_description">Highest 20-minute mean power so far in this ride. Classic FTP-test duration; ≈95 % gives an FTP estimate.</string>
+    <string name="mmp_60min_name">Best 60 min power</string>
+    <string name="mmp_60min_description">Highest 60-minute mean power so far in this ride — closest single-number proxy for true FTP.</string>
+
+    <string name="optimal_cadence_name">Optimal cadence</string>
+    <string name="optimal_cadence_description">Within-ride best-efficiency cadence (RPM) — bins power+HR by cadence and reports the bucket with the highest watts-per-beat. Per-ride finals are persisted; the rolling mean shows on the Readiness screen. Reads — until at least two cadence bins have enough samples.</string>
+
+    <string name="readiness_cadence_fmt">Rolling optimal cadence: %1$d RPM  (%2$d rides)</string>
+    <string name="readiness_cadence_none">No optimal-cadence history yet — ride with a power meter and HR strap paired.</string>
+
     <string name="readiness_button">Take HRV readiness reading</string>
     <string name="readiness_title">HRV Readiness</string>
     <string name="readiness_body">Take a 2-minute resting reading with your H10 before clipping in. Compared against your rolling 7-day average to suggest whether to go hard or take it easy.\n\nSit still, breathe normally, and don\'t talk.</string>
@@ -65,6 +112,29 @@
     <string name="readiness_no_history">No history yet — today\'s reading will start your baseline.</string>
     <string name="readiness_history_fmt">7-day baseline: %1$d readings, avg %2$.1f ms</string>
     <string name="readiness_permissions_required">Bluetooth permission is required to read the strap.</string>
+
+    <string name="settings_button">Edit rider settings</string>
+    <string name="settings_title">Rider Settings</string>
+    <string name="settings_body">These values feed Intensity Factor / TSS (FTP), W′ balance (CP and W′), and future power-to-weight fields. Defaults are reasonable starting values; tune them once you know your numbers.</string>
+    <string name="settings_ftp_label">FTP (W)</string>
+    <string name="settings_ftp_hint">50 – 600</string>
+    <string name="settings_cp_label">Critical Power (W)</string>
+    <string name="settings_cp_hint">50 – 600</string>
+    <string name="settings_wprime_label">W′ (J)</string>
+    <string name="settings_wprime_hint">5000 – 40000</string>
+    <string name="settings_hrmax_label">HR max (bpm)</string>
+    <string name="settings_hrmax_hint">100 – 230</string>
+    <string name="settings_weight_label">Weight (kg)</string>
+    <string name="settings_weight_hint">30 – 200</string>
+    <string name="settings_save">Save</string>
+    <string name="settings_reset">Reset to defaults</string>
+    <string name="settings_saved_toast">Saved</string>
+    <string name="settings_reset_toast">Defaults loaded — press Save to apply</string>
+    <string name="settings_err_ftp">FTP must be between %1$d and %2$d W</string>
+    <string name="settings_err_cp">Critical Power must be between %1$d and %2$d W</string>
+    <string name="settings_err_wprime">W′ must be between %1$d and %2$d J</string>
+    <string name="settings_err_hrmax">HR max must be between %1$d and %2$d bpm</string>
+    <string name="settings_err_weight">Weight must be between %1$.0f and %2$.0f kg</string>
 
     <string name="intro_title">HeartKaroo</string>
     <string name="intro_body">This app adds three data fields to your Karoo:\n\n• Pw:Hr Decoupling — % drift between the first and second half of the last 30 min of riding (Friel method). &lt; 5% means well-coupled aerobic effort. Field reads — for the first 10 min while the window fills.\n\n• HRV (RMSSD) — real-time heart rate variability in ms, read directly from a Polar H10 over Bluetooth. Pair the strap under Sensors first.\n\n• HRV Stress % — live HRV compared against a rolling 20-min baseline. Reads — for the first 5 min while the baseline settles, then higher numbers mean HRV is depressed vs your in-ride trend.\n\nOn your Karoo:\n1. Edit a ride profile page\n2. Add a data field\n3. Pick \"Pw:Hr Decoupling\", \"HRV (RMSSD)\", or \"HRV Stress %\" under Extensions</string>

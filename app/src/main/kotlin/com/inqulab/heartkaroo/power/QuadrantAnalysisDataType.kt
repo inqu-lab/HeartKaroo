@@ -1,4 +1,4 @@
-package com.inqulab.heartkaroo.wprime
+package com.inqulab.heartkaroo.power
 
 import com.inqulab.heartkaroo.HeartKarooExtension
 import com.inqulab.heartkaroo.settings.RiderSettings
@@ -12,38 +12,39 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
-/**
- * Karoo data field for Skiba W′ balance (anaerobic capacity remaining,
- * in joules). CP and W′₀ are read from RiderSettings each time the
- * stream starts, so adjusting them in the Settings screen takes effect
- * on the next field subscription.
- */
-class WPrimeBalanceDataType(
+class QuadrantAnalysisDataType(
     private val extension: HeartKarooExtension,
 ) : DataTypeImpl(extension.extension, TYPE_ID) {
 
     companion object {
-        const val TYPE_ID = "w_prime_balance"
-        const val FIELD = "w_prime_balance"
+        const val TYPE_ID = "quadrant"
+        const val FIELD = "quadrant"
     }
 
     override fun startStream(emitter: Emitter<StreamState>) {
         val settings = RiderSettings(extension.applicationContext)
-        val calc = WPrimeBalanceCalculator(
-            criticalPowerW = settings.criticalPowerW.toDouble(),
-            wPrimeJ = settings.wPrimeJ.toDouble(),
-        )
+        val calc = QuadrantAnalysisCalculator(ftpW = settings.ftpW.toDouble())
         val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         val job: Job = scope.launch {
-            extension.karooSystem.streamDataFlow(DataType.Type.POWER).collect { ps ->
-                val p = (ps as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull() ?: return@collect
-                val balance = calc.add(System.currentTimeMillis(), p)
+            combine(
+                extension.karooSystem.streamDataFlow(DataType.Type.POWER),
+                extension.karooSystem.streamDataFlow(DataType.Type.CADENCE),
+            ) { ps, cs ->
+                Pair(
+                    (ps as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull(),
+                    (cs as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull(),
+                )
+            }.collect { (p, c) ->
+                if (p != null && c != null) {
+                    calc.add(System.currentTimeMillis(), p, c)
+                }
+                val q = calc.dominantQuadrant()
                 emitter.onNext(
-                    StreamState.Streaming(
-                        DataPoint(dataTypeId, mapOf(FIELD to balance.toDouble())),
-                    ),
+                    if (q == null) StreamState.NotAvailable
+                    else StreamState.Streaming(DataPoint(dataTypeId, mapOf(FIELD to q.toDouble()))),
                 )
             }
         }
