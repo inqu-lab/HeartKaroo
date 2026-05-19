@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">HeartKaroo</string>
+    <string name="extension_name">HeartKaroo</string>
+
+    <string name="decoupling_name">Pw:Hr Decoupling</string>
+    <string name="decoupling_description">Real-time aerobic decoupling between power and heart rate (%). Lower is better; under 5% indicates well-coupled aerobic effort.</string>
+
+    <string name="hrv_rmssd_name">HRV (RMSSD)</string>
+    <string name="hrv_rmssd_description">Heart Rate Variability — RMSSD in milliseconds, calculated from Polar H10 RR intervals via Bluetooth</string>
+
+    <string name="intro_title">HeartKaroo</string>
+    <string name="intro_body">This app adds two data fields to your Karoo:\n\n• Pw:Hr Decoupling — % drift between the first and second half of the last 30 min of riding (Friel method). &lt; 5% means well-coupled aerobic effort. Field reads — for the first 10 min while the window fills.\n\n• HRV (RMSSD) — real-time heart rate variability in ms, read directly from a Polar H10 over Bluetooth. Pair the strap under Sensors first.\n\nOn your Karoo:\n1. Edit a ride profile page\n2. Add a data field\n3. Pick \"Pw:Hr Decoupling\" or \"HRV (RMSSD)\" under Extensions</string>
+</resources>
