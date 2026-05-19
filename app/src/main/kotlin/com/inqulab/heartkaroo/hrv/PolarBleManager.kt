@@ -1,42 +1,37 @@
 package com.inqulab.heartkaroo.hrv
 
-import android.Manifest
 import android.bluetooth.BluetoothDevice
-import android.bluetooth.BluetoothGatt
-import android.bluetooth.BluetoothGattCallback
-import android.bluetooth.BluetoothGattCharacteristic
-import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
-import android.bluetooth.BluetoothProfile
-import android.bluetooth.le.ScanCallback
-import android.bluetooth.le.ScanFilter
-import android.bluetooth.le.ScanResult
-import android.bluetooth.le.ScanSettings
 import android.content.Context
-import android.os.Build
-import android.os.Handler
-import android.os.Looper
-import android.os.ParcelUuid
-import androidx.annotation.RequiresPermission
+import com.polar.androidcommunications.api.ble.model.DisInfo
+import com.polar.sdk.api.PolarBleApi
+import com.polar.sdk.api.PolarBleApiCallback
+import com.polar.sdk.api.PolarBleApiDefaultImpl
+import com.polar.sdk.api.model.PolarDeviceInfo
+import com.polar.sdk.api.model.PolarHrData
+import io.reactivex.rxjava3.disposables.Disposable
+import io.reactivex.rxjava3.schedulers.Schedulers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
-import java.util.UUID
-import java.util.concurrent.atomic.AtomicReference
 
+/**
+ * Wraps Polar's official BLE SDK so the Karoo extension talks to the H10
+ * (or any modern Polar HR strap) through the same channel Polar's own app
+ * uses. The SDK gives us:
+ *
+ *  - automatic reconnection when the strap briefly leaves range
+ *  - per-beat RR intervals at the H10's native precision (rather than the
+ *    standard 2A37 characteristic, which truncates to 1/1024 s and drops
+ *    intermediate beats between notifications)
+ *
+ * The public surface (BleEvent, connect(), startDeviceScan(), the HRV
+ * StateFlows) is unchanged so the rest of the extension is unaffected.
+ */
 class PolarBleManager(private val context: Context) {
-
-    companion object {
-        val HR_SERVICE_UUID: UUID = UUID.fromString("0000180d-0000-1000-8000-00805f9b34fb")
-        val HR_MEASUREMENT_UUID: UUID = UUID.fromString("00002a37-0000-1000-8000-00805f9b34fb")
-        val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
-        private const val INITIAL_RECONNECT_DELAY_MS = 2_000L
-        private const val MAX_RECONNECT_DELAY_MS = 30_000L
-        private const val PREFERRED_MTU = 232
-    }
 
     sealed class BleEvent {
         object Connected : BleEvent()
@@ -44,8 +39,22 @@ class PolarBleManager(private val context: Context) {
         data class Heartrate(val bpm: Int) : BleEvent()
     }
 
-    private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+    private val bluetoothManager =
+        context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val bluetoothAdapter = bluetoothManager.adapter
+
+    private val api: PolarBleApi by lazy {
+        PolarBleApiDefaultImpl.defaultImplementation(
+            context.applicationContext,
+            setOf(
+                PolarBleApi.PolarBleSdkFeature.FEATURE_HR,
+                PolarBleApi.PolarBleSdkFeature.FEATURE_BATTERY_INFO,
+                PolarBleApi.PolarBleSdkFeature.FEATURE_DEVICE_INFO,
+            ),
+        ).apply {
+            setAutomaticReconnection(true)
+        }
+    }
 
     private val _rmssdFlow = MutableStateFlow(0f)
     val rmssdFlow: StateFlow<Float> = _rmssdFlow.asStateFlow()
@@ -86,20 +95,6 @@ class PolarBleManager(private val context: Context) {
     private val _connectedFlow = MutableStateFlow(false)
     val connectedFlow: StateFlow<Boolean> = _connectedFlow.asStateFlow()
 
-    fun startDeviceScan(onDevice: (BluetoothDevice) -> Unit): () -> Unit {
-        val leScanner = bluetoothAdapter?.bluetoothLeScanner ?: return {}
-        val seenAddresses = mutableSetOf<String>()
-        val scanCallback = object : ScanCallback() {
-            override fun onScanResult(callbackType: Int, result: ScanResult) {
-                if (seenAddresses.add(result.device.address)) onDevice(result.device)
-            }
-        }
-        val filter = ScanFilter.Builder().setServiceUuid(ParcelUuid(HR_SERVICE_UUID)).build()
-        val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
-        leScanner.startScan(listOf(filter), settings, scanCallback)
-        return { leScanner.stopScan(scanCallback) }
-    }
-
     private fun resetHrvCalculators() {
         calculator.reset()
         stressCalculator.reset()
@@ -121,141 +116,110 @@ class PolarBleManager(private val context: Context) {
         _ectopicRateFlow.value = null
     }
 
-    fun connect(address: String): Flow<BleEvent> = callbackFlow @androidx.annotation.RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT) {
-        val device = bluetoothAdapter.getRemoteDevice(address)
+    fun startDeviceScan(onDevice: (BluetoothDevice) -> Unit): () -> Unit {
+        val disposable = api.searchForDevice()
+            .subscribeOn(Schedulers.io())
+            .subscribe(
+                { info ->
+                    val adapter = bluetoothAdapter ?: return@subscribe
+                    runCatching { adapter.getRemoteDevice(info.address) }
+                        .getOrNull()
+                        ?.let(onDevice)
+                },
+                { /* ignore scan errors */ },
+            )
+        return { disposable.dispose() }
+    }
+
+    fun connect(address: String): Flow<BleEvent> = callbackFlow {
         val scope = this
-        val gattRef = AtomicReference<BluetoothGatt?>(null)
-        val mainHandler = Handler(Looper.getMainLooper())
-        var reconnectAttempts = 0
-        var closed = false
+        var hrDisposable: Disposable? = null
 
-        val gattCallback = object : BluetoothGattCallback() {
-            @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-            override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
-                when (newState) {
-                    BluetoothProfile.STATE_CONNECTED -> {
-                        gattRef.set(gatt)
-                        reconnectAttempts = 0
-                        _connectedFlow.value = true
-                        scope.trySend(BleEvent.Connected)
-                        if (!gatt.requestMtu(PREFERRED_MTU)) {
-                            // MTU request rejected by the stack; fall back to immediate discovery.
-                            gatt.discoverServices()
-                        }
-                    }
-                    BluetoothProfile.STATE_DISCONNECTED -> {
-                        gattRef.set(null)
-                        _connectedFlow.value = false
-                        resetHrvCalculators()
-                        scope.trySend(BleEvent.Disconnected)
-                        try { gatt.close() } catch (_: SecurityException) {}
-                        if (closed) return
-                        val attempt = reconnectAttempts
-                        reconnectAttempts = (reconnectAttempts + 1).coerceAtMost(10)
-                        val delayMs = (INITIAL_RECONNECT_DELAY_MS shl attempt.coerceAtMost(4))
-                            .coerceAtMost(MAX_RECONNECT_DELAY_MS)
-                        val self = this
-                        mainHandler.postDelayed({
-                            if (closed) return@postDelayed
-                            try {
-                                val newGatt = device.connectGatt(
-                                    context,
-                                    /* autoConnect = */ true,
-                                    self,
-                                    BluetoothDevice.TRANSPORT_LE,
-                                )
-                                gattRef.set(newGatt)
-                            } catch (_: SecurityException) {
-                                // Permission revoked mid-session; nothing useful we can do here.
-                            }
-                        }, delayMs)
-                    }
-                }
+        val callback = object : PolarBleApiCallback() {
+            override fun deviceConnected(polarDeviceInfo: PolarDeviceInfo) {
+                if (!polarDeviceInfo.address.equals(address, ignoreCase = true)) return
+                _connectedFlow.value = true
+                scope.trySend(BleEvent.Connected)
             }
 
-            override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
-                // Proceed to service discovery regardless of MTU negotiation outcome.
-                gatt.discoverServices()
+            override fun deviceDisconnected(polarDeviceInfo: PolarDeviceInfo) {
+                if (!polarDeviceInfo.address.equals(address, ignoreCase = true)) return
+                _connectedFlow.value = false
+                hrDisposable?.dispose()
+                hrDisposable = null
+                resetHrvCalculators()
+                scope.trySend(BleEvent.Disconnected)
+                // setAutomaticReconnection(true) makes the SDK keep retrying;
+                // we just clear local state and wait for the next deviceConnected.
             }
 
-            @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-            override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
-                if (status != BluetoothGatt.GATT_SUCCESS) return
-                val hrChar = gatt.getService(HR_SERVICE_UUID)
-                    ?.getCharacteristic(HR_MEASUREMENT_UUID) ?: return
-                if (!gatt.setCharacteristicNotification(hrChar, true)) return
-                val cccd = hrChar.getDescriptor(CCCD_UUID) ?: return
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    gatt.writeDescriptor(cccd, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
-                } else {
-                    @Suppress("DEPRECATION")
-                    cccd.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                    @Suppress("DEPRECATION")
-                    gatt.writeDescriptor(cccd)
-                }
+            override fun disInformationReceived(identifier: String, disInfo: DisInfo) {
+                // Device information messages — no-op; the SDK requires this overload
+                // (it's abstract on the callback provider interface).
             }
 
-            override fun onCharacteristicChanged(
-                gatt: BluetoothGatt,
-                characteristic: BluetoothGattCharacteristic,
-                value: ByteArray,
-            ) = handlePayload(value)
-
-            @Deprecated("Deprecated in Java")
-            override fun onCharacteristicChanged(
-                gatt: BluetoothGatt,
-                characteristic: BluetoothGattCharacteristic,
+            override fun bleSdkFeatureReady(
+                identifier: String,
+                feature: PolarBleApi.PolarBleSdkFeature,
             ) {
-                @Suppress("DEPRECATION")
-                handlePayload(characteristic.value)
-            }
-
-            private fun handlePayload(data: ByteArray) {
-                val parsed = parseHeartRateMeasurement(data) ?: return
-                scope.trySend(BleEvent.Heartrate(parsed.bpm))
-                for (rr in parsed.rrIntervalsMs) {
-                    calculator.addInterval(rr)
-                    dfaCalculator.addInterval(rr)
-                    sdnnCalculator.addInterval(rr)
-                    pnn50Calculator.addInterval(rr)
-                    poincareCalculator.addInterval(rr)
-                    respiratoryRateCalculator.addInterval(rr)
-                    ectopicDetector.addInterval(rr)
-                }
-                if (parsed.rrIntervalsMs.isNotEmpty() && calculator.hasData) {
-                    val rmssd = calculator.getRmssd()
-                    _rmssdFlow.value = rmssd
-                    stressCalculator.addRmssd(rmssd)
-                    _stressFlow.value = stressCalculator.getStressPct()
-                }
-                if (parsed.rrIntervalsMs.isNotEmpty()) {
-                    _dfaAlpha1Flow.value = dfaCalculator.getAlpha1()
-                    _sdnnFlow.value = sdnnCalculator.getSdnn()
-                    _pnn50Flow.value = pnn50Calculator.getPnn50()
-                    val pc = poincareCalculator.getResult()
-                    _sd1Flow.value = pc?.sd1
-                    _sd2Flow.value = pc?.sd2
-                    _sd1Sd2RatioFlow.value = pc?.ratio
-                    _respiratoryRateFlow.value = respiratoryRateCalculator.getBreathsPerMin()
-                    _ectopicRateFlow.value = ectopicDetector.getEventsPerMin()
-                }
+                if (feature != PolarBleApi.PolarBleSdkFeature.FEATURE_HR) return
+                if (!identifier.equals(address, ignoreCase = true)) return
+                hrDisposable?.dispose()
+                hrDisposable = api.startHrStreaming(identifier)
+                    .observeOn(Schedulers.computation())
+                    .subscribe(
+                        { hrData -> consumeHrData(hrData, scope) },
+                        { /* stream error — SDK will fire deviceDisconnected if relevant */ },
+                    )
             }
         }
 
-        // autoConnect=true asks the OS to maintain the connection in the background:
-        // if the strap goes out of range or briefly drops, Android keeps scanning for it
-        // without an app-level reconnect loop being required.
-        gattRef.set(device.connectGatt(context, /* autoConnect = */ true, gattCallback, BluetoothDevice.TRANSPORT_LE))
+        api.setApiCallback(callback)
+        runCatching { api.connectToDevice(address) }
 
         awaitClose {
-            closed = true
-            mainHandler.removeCallbacksAndMessages(null)
-            gattRef.getAndSet(null)?.let { gatt ->
-                try { gatt.disconnect() } catch (_: SecurityException) {}
-                try { gatt.close() } catch (_: SecurityException) {}
-            }
+            hrDisposable?.dispose()
+            runCatching { api.disconnectFromDevice(address) }
             _connectedFlow.value = false
             resetHrvCalculators()
+        }
+    }
+
+    private fun consumeHrData(
+        hrData: PolarHrData,
+        scope: kotlinx.coroutines.channels.SendChannel<BleEvent>,
+    ) {
+        for (sample in hrData.samples) {
+            if (sample.hr > 0) scope.trySend(BleEvent.Heartrate(sample.hr))
+            if (!sample.rrAvailable) continue
+            var anyRr = false
+            for (rr in sample.rrsMs) {
+                if (rr <= 0) continue
+                anyRr = true
+                calculator.addInterval(rr)
+                dfaCalculator.addInterval(rr)
+                sdnnCalculator.addInterval(rr)
+                pnn50Calculator.addInterval(rr)
+                poincareCalculator.addInterval(rr)
+                respiratoryRateCalculator.addInterval(rr)
+                ectopicDetector.addInterval(rr)
+            }
+            if (!anyRr) continue
+            if (calculator.hasData) {
+                val rmssd = calculator.getRmssd()
+                _rmssdFlow.value = rmssd
+                stressCalculator.addRmssd(rmssd)
+                _stressFlow.value = stressCalculator.getStressPct()
+            }
+            _dfaAlpha1Flow.value = dfaCalculator.getAlpha1()
+            _sdnnFlow.value = sdnnCalculator.getSdnn()
+            _pnn50Flow.value = pnn50Calculator.getPnn50()
+            val pc = poincareCalculator.getResult()
+            _sd1Flow.value = pc?.sd1
+            _sd2Flow.value = pc?.sd2
+            _sd1Sd2RatioFlow.value = pc?.ratio
+            _respiratoryRateFlow.value = respiratoryRateCalculator.getBreathsPerMin()
+            _ectopicRateFlow.value = ectopicDetector.getEventsPerMin()
         }
     }
 }
