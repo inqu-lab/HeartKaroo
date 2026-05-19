@@ -2,6 +2,7 @@ package com.inqulab.heartkaroo
 
 import com.inqulab.heartkaroo.decoupling.DecouplingDataType
 import com.inqulab.heartkaroo.hrv.HRVDataType
+import com.inqulab.heartkaroo.hrv.HRVStressDataType
 import com.inqulab.heartkaroo.hrv.PolarBleManager
 import io.hammerhead.karooext.KarooSystemService
 import io.hammerhead.karooext.extension.KarooExtension
@@ -21,6 +22,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 
 class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
@@ -34,6 +36,13 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             fieldName = "hrv_rmssd",
             units = "ms",
         )
+
+        val STRESS_FIELD = DeveloperField(
+            fieldDefinitionNumber = 1,
+            fitBaseTypeId = 136,
+            fieldName = "hrv_stress_pct",
+            units = "pct",
+        )
     }
 
     lateinit var karooSystem: KarooSystemService
@@ -46,6 +55,7 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
         listOf(
             DecouplingDataType(this),
             HRVDataType(bleManager, EXTENSION_ID),
+            HRVStressDataType(bleManager, EXTENSION_ID),
         )
     }
 
@@ -95,14 +105,25 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
     }
 
     override fun startFit(emitter: Emitter<FitEffect>) {
-        val job: Job = CoroutineScope(Dispatchers.IO).launch {
+        val scope = CoroutineScope(Dispatchers.IO)
+        val rmssdJob: Job = scope.launch {
             bleManager.rmssdFlow
                 .filter { it > 0f }
                 .collect { rmssd ->
                     emitter.onNext(WriteToRecordMesg(FieldValue(RMSSD_FIELD, rmssd.toDouble())))
                 }
         }
-        emitter.setCancellable { job.cancel() }
+        val stressJob: Job = scope.launch {
+            bleManager.stressFlow
+                .filterNotNull()
+                .collect { stress ->
+                    emitter.onNext(WriteToRecordMesg(FieldValue(STRESS_FIELD, stress.toDouble())))
+                }
+        }
+        emitter.setCancellable {
+            rmssdJob.cancel()
+            stressJob.cancel()
+        }
     }
 
     override fun onDestroy() {

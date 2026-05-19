@@ -6,10 +6,12 @@ A single Hammerhead Karoo extension that combines two earlier extensions:
 |---|---|---|
 | Pw:Hr Decoupling | `decoupling` | Real-time aerobic decoupling (%) computed over a rolling 30-minute window using the Friel method. |
 | HRV (RMSSD) | `hrv_rmssd` | Root-mean-square of successive RR-interval differences, in milliseconds. Calculated over a 30-beat sliding window from a Polar H10 (or any standard BLE HRM) read directly over Bluetooth. |
+| HRV Stress % | `hrv_stress` | Live HRV stress score: current RMSSD compared against an in-ride 20-minute EMA baseline, clamped 0–100%. Reads `--` for the first 5 min while the baseline settles. |
 
-When the HRV stream is active the extension also writes RMSSD into the
-recorded `.fit` file as a developer field (`hrv_rmssd`, units `ms`),
-alongside the standard heart-rate record.
+When the HRV stream is active the extension also writes RMSSD and the
+stress % into the recorded `.fit` file as developer fields
+(`hrv_rmssd`, units `ms`; `hrv_stress_pct`, units `pct`), alongside the
+standard heart-rate record.
 
 ## How it works
 
