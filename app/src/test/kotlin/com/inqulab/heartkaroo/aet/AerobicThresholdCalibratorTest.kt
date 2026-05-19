@@ -104,15 +104,22 @@ class AerobicThresholdCalibratorTest {
             minSamples = 5,
             powerSmoothingMs = 30_000L,
         )
-        // Burst 200 W for 30s, then take alpha → smoothed power ≈ 200
-        for (s in 0 until 30) calc.addPower(s * 1_000L, 200.0)
-        calc.addAlpha(0.9f)
-        // Then high-intensity 400 W for 30 s, sample again
-        for (s in 30 until 60) calc.addPower(s * 1_000L, 400.0)
-        calc.addAlpha(0.6f)
-        // The two paired points should bracket 0.75 around 300 W (midpoint)
+        // Five alternating bursts at 200 W / 400 W, sampling alpha after
+        // each block so the smoothed power locks to the block's level.
+        val blockSec = 30
+        var t = 0L
+        val targetPowers = listOf(200.0, 400.0, 200.0, 400.0, 200.0)
+        val alphas = listOf(0.9f, 0.6f, 0.9f, 0.6f, 0.9f)
+        for ((p, a) in targetPowers.zip(alphas)) {
+            for (s in 0 until blockSec) {
+                calc.addPower(t, p)
+                t += 1_000L
+            }
+            calc.addAlpha(a)
+        }
         val est = calc.currentEstimate()
         assertNotNull(est)
-        assertTrue("estimate should fall between the two power levels, got $est", est!! in 200f..400f)
+        // α at 200 W ≈ 0.9, α at 400 W ≈ 0.6 → 0.75 ≈ 300 W
+        assertTrue("estimate should bracket 200..400, got $est", est!! in 200f..400f)
     }
 }
