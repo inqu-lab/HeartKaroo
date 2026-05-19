@@ -8,7 +8,6 @@ import io.hammerhead.karooext.models.StreamState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 
 /**
@@ -24,16 +23,23 @@ class HrvFlowDataType(
 ) : DataTypeImpl(extensionId, typeId) {
 
     override fun startStream(emitter: Emitter<StreamState>) {
+        // Emit NotAvailable up front so Karoo renders "—" instead of "no sensor"
+        // while the strap is connecting or while the HRV window is still filling.
+        emitter.onNext(StreamState.NotAvailable)
         val job = CoroutineScope(Dispatchers.IO).launch {
-            source.filterNotNull().collect { value ->
-                emitter.onNext(
-                    StreamState.Streaming(
-                        DataPoint(
-                            dataTypeId = dataTypeId,
-                            values = mapOf(DataType.Field.SINGLE to value.toDouble()),
+            source.collect { value ->
+                if (value == null) {
+                    emitter.onNext(StreamState.NotAvailable)
+                } else {
+                    emitter.onNext(
+                        StreamState.Streaming(
+                            DataPoint(
+                                dataTypeId = dataTypeId,
+                                values = mapOf(DataType.Field.SINGLE to value.toDouble()),
+                            )
                         )
                     )
-                )
+                }
             }
         }
         emitter.setCancellable { job.cancel() }

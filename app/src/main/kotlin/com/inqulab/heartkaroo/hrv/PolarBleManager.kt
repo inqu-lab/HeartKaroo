@@ -24,8 +24,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.isActive
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicReference
 
 class PolarBleManager(private val context: Context) {
 
@@ -33,6 +33,9 @@ class PolarBleManager(private val context: Context) {
         val HR_SERVICE_UUID: UUID = UUID.fromString("0000180d-0000-1000-8000-00805f9b34fb")
         val HR_MEASUREMENT_UUID: UUID = UUID.fromString("00002a37-0000-1000-8000-00805f9b34fb")
         val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+        private const val INITIAL_RECONNECT_DELAY_MS = 2_000L
+        private const val MAX_RECONNECT_DELAY_MS = 30_000L
+        private const val PREFERRED_MTU = 232
     }
 
     sealed class BleEvent {
@@ -80,6 +83,9 @@ class PolarBleManager(private val context: Context) {
     val ectopicRateFlow: StateFlow<Float?> = _ectopicRateFlow.asStateFlow()
     private val ectopicDetector = EctopicDetector()
 
+    private val _connectedFlow = MutableStateFlow(false)
+    val connectedFlow: StateFlow<Boolean> = _connectedFlow.asStateFlow()
+
     fun startDeviceScan(onDevice: (BluetoothDevice) -> Unit): () -> Unit {
         val leScanner = bluetoothAdapter?.bluetoothLeScanner ?: return {}
         val seenAddresses = mutableSetOf<String>()
@@ -94,33 +100,82 @@ class PolarBleManager(private val context: Context) {
         return { leScanner.stopScan(scanCallback) }
     }
 
+    private fun resetHrvCalculators() {
+        calculator.reset()
+        stressCalculator.reset()
+        dfaCalculator.reset()
+        sdnnCalculator.reset()
+        pnn50Calculator.reset()
+        poincareCalculator.reset()
+        respiratoryRateCalculator.reset()
+        ectopicDetector.reset()
+        _rmssdFlow.value = 0f
+        _stressFlow.value = null
+        _dfaAlpha1Flow.value = null
+        _sdnnFlow.value = null
+        _pnn50Flow.value = null
+        _sd1Flow.value = null
+        _sd2Flow.value = null
+        _sd1Sd2RatioFlow.value = null
+        _respiratoryRateFlow.value = null
+        _ectopicRateFlow.value = null
+    }
+
     fun connect(address: String): Flow<BleEvent> = callbackFlow @androidx.annotation.RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT) {
         val device = bluetoothAdapter.getRemoteDevice(address)
         val scope = this
-        var currentGatt: BluetoothGatt? = null
+        val gattRef = AtomicReference<BluetoothGatt?>(null)
+        val mainHandler = Handler(Looper.getMainLooper())
+        var reconnectAttempts = 0
+        var closed = false
 
         val gattCallback = object : BluetoothGattCallback() {
             @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
             override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
                 when (newState) {
                     BluetoothProfile.STATE_CONNECTED -> {
-                        currentGatt = gatt
+                        gattRef.set(gatt)
+                        reconnectAttempts = 0
+                        _connectedFlow.value = true
                         scope.trySend(BleEvent.Connected)
-                        gatt.discoverServices()
-                    }
-                    BluetoothProfile.STATE_DISCONNECTED -> {
-                        currentGatt = null
-                        scope.trySend(BleEvent.Disconnected)
-                        gatt.close()
-                        if (scope.isActive) {
-                            Handler(Looper.getMainLooper()).postDelayed({
-                                if (scope.isActive) {
-                                    device.connectGatt(context, false, this, BluetoothDevice.TRANSPORT_LE)
-                                }
-                            }, 5_000)
+                        if (!gatt.requestMtu(PREFERRED_MTU)) {
+                            // MTU request rejected by the stack; fall back to immediate discovery.
+                            gatt.discoverServices()
                         }
                     }
+                    BluetoothProfile.STATE_DISCONNECTED -> {
+                        gattRef.set(null)
+                        _connectedFlow.value = false
+                        resetHrvCalculators()
+                        scope.trySend(BleEvent.Disconnected)
+                        try { gatt.close() } catch (_: SecurityException) {}
+                        if (closed) return
+                        val attempt = reconnectAttempts
+                        reconnectAttempts = (reconnectAttempts + 1).coerceAtMost(10)
+                        val delayMs = (INITIAL_RECONNECT_DELAY_MS shl attempt.coerceAtMost(4))
+                            .coerceAtMost(MAX_RECONNECT_DELAY_MS)
+                        val self = this
+                        mainHandler.postDelayed({
+                            if (closed) return@postDelayed
+                            try {
+                                val newGatt = device.connectGatt(
+                                    context,
+                                    /* autoConnect = */ true,
+                                    self,
+                                    BluetoothDevice.TRANSPORT_LE,
+                                )
+                                gattRef.set(newGatt)
+                            } catch (_: SecurityException) {
+                                // Permission revoked mid-session; nothing useful we can do here.
+                            }
+                        }, delayMs)
+                    }
                 }
+            }
+
+            override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
+                // Proceed to service discovery regardless of MTU negotiation outcome.
+                gatt.discoverServices()
             }
 
             @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
@@ -128,7 +183,7 @@ class PolarBleManager(private val context: Context) {
                 if (status != BluetoothGatt.GATT_SUCCESS) return
                 val hrChar = gatt.getService(HR_SERVICE_UUID)
                     ?.getCharacteristic(HR_MEASUREMENT_UUID) ?: return
-                gatt.setCharacteristicNotification(hrChar, true)
+                if (!gatt.setCharacteristicNotification(hrChar, true)) return
                 val cccd = hrChar.getDescriptor(CCCD_UUID) ?: return
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     gatt.writeDescriptor(cccd, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
@@ -187,12 +242,20 @@ class PolarBleManager(private val context: Context) {
             }
         }
 
-        currentGatt = device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+        // autoConnect=true asks the OS to maintain the connection in the background:
+        // if the strap goes out of range or briefly drops, Android keeps scanning for it
+        // without an app-level reconnect loop being required.
+        gattRef.set(device.connectGatt(context, /* autoConnect = */ true, gattCallback, BluetoothDevice.TRANSPORT_LE))
 
         awaitClose {
-            currentGatt?.disconnect()
-            currentGatt?.close()
-            currentGatt = null
+            closed = true
+            mainHandler.removeCallbacksAndMessages(null)
+            gattRef.getAndSet(null)?.let { gatt ->
+                try { gatt.disconnect() } catch (_: SecurityException) {}
+                try { gatt.close() } catch (_: SecurityException) {}
+            }
+            _connectedFlow.value = false
+            resetHrvCalculators()
         }
     }
 }
