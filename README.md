@@ -70,6 +70,10 @@ live-display-only.
   surfaced as a "go hard / go easy / normal" verdict. Baseline lives in
   `SharedPreferences` and updates each time you measure. Also displays
   the rolling AeT estimate accumulated from previous rides.
+- **Rider Settings** — FTP, critical power, W′, HR max, and weight.
+  These feed Intensity Factor / TSS (FTP), W′ balance (CP and W′), and
+  any future power-to-weight fields. Range-validated on save, with a
+  "Reset to defaults" button.
 
 ## How it works
 

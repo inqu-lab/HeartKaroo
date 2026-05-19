@@ -1,6 +1,7 @@
 package com.inqulab.heartkaroo.wprime
 
 import com.inqulab.heartkaroo.HeartKarooExtension
+import com.inqulab.heartkaroo.settings.RiderSettings
 import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.internal.Emitter
 import io.hammerhead.karooext.models.DataPoint
@@ -15,10 +16,9 @@ import kotlinx.coroutines.launch
 
 /**
  * Karoo data field for Skiba W′ balance (anaerobic capacity remaining,
- * in joules).
- *
- * CP and W′₀ default to broadly typical values (250 W, 20 000 J); a
- * settings screen to personalise these is intentionally deferred.
+ * in joules). CP and W′₀ are read from RiderSettings each time the
+ * stream starts, so adjusting them in the Settings screen takes effect
+ * on the next field subscription.
  */
 class WPrimeBalanceDataType(
     private val extension: HeartKarooExtension,
@@ -30,7 +30,11 @@ class WPrimeBalanceDataType(
     }
 
     override fun startStream(emitter: Emitter<StreamState>) {
-        val calc = WPrimeBalanceCalculator()
+        val settings = RiderSettings(extension.applicationContext)
+        val calc = WPrimeBalanceCalculator(
+            criticalPowerW = settings.criticalPowerW.toDouble(),
+            wPrimeJ = settings.wPrimeJ.toDouble(),
+        )
         val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         val job: Job = scope.launch {
             extension.karooSystem.streamDataFlow(DataType.Type.POWER).collect { ps ->

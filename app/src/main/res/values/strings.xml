@@ -107,6 +107,29 @@
     <string name="readiness_history_fmt">7-day baseline: %1$d readings, avg %2$.1f ms</string>
     <string name="readiness_permissions_required">Bluetooth permission is required to read the strap.</string>
 
+    <string name="settings_button">Edit rider settings</string>
+    <string name="settings_title">Rider Settings</string>
+    <string name="settings_body">These values feed Intensity Factor / TSS (FTP), W′ balance (CP and W′), and future power-to-weight fields. Defaults are reasonable starting values; tune them once you know your numbers.</string>
+    <string name="settings_ftp_label">FTP (W)</string>
+    <string name="settings_ftp_hint">50 – 600</string>
+    <string name="settings_cp_label">Critical Power (W)</string>
+    <string name="settings_cp_hint">50 – 600</string>
+    <string name="settings_wprime_label">W′ (J)</string>
+    <string name="settings_wprime_hint">5000 – 40000</string>
+    <string name="settings_hrmax_label">HR max (bpm)</string>
+    <string name="settings_hrmax_hint">100 – 230</string>
+    <string name="settings_weight_label">Weight (kg)</string>
+    <string name="settings_weight_hint">30 – 200</string>
+    <string name="settings_save">Save</string>
+    <string name="settings_reset">Reset to defaults</string>
+    <string name="settings_saved_toast">Saved</string>
+    <string name="settings_reset_toast">Defaults loaded — press Save to apply</string>
+    <string name="settings_err_ftp">FTP must be between %1$d and %2$d W</string>
+    <string name="settings_err_cp">Critical Power must be between %1$d and %2$d W</string>
+    <string name="settings_err_wprime">W′ must be between %1$d and %2$d J</string>
+    <string name="settings_err_hrmax">HR max must be between %1$d and %2$d bpm</string>
+    <string name="settings_err_weight">Weight must be between %1$.0f and %2$.0f kg</string>
+
     <string name="intro_title">HeartKaroo</string>
     <string name="intro_body">This app adds three data fields to your Karoo:\n\n• Pw:Hr Decoupling — % drift between the first and second half of the last 30 min of riding (Friel method). &lt; 5% means well-coupled aerobic effort. Field reads — for the first 10 min while the window fills.\n\n• HRV (RMSSD) — real-time heart rate variability in ms, read directly from a Polar H10 over Bluetooth. Pair the strap under Sensors first.\n\n• HRV Stress % — live HRV compared against a rolling 20-min baseline. Reads — for the first 5 min while the baseline settles, then higher numbers mean HRV is depressed vs your in-ride trend.\n\nOn your Karoo:\n1. Edit a ride profile page\n2. Add a data field\n3. Pick \"Pw:Hr Decoupling\", \"HRV (RMSSD)\", or \"HRV Stress %\" under Extensions</string>
 </resources>
