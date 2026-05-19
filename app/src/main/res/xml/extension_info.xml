@@ -91,4 +91,27 @@
         unitName="/min"
         icon="@drawable/ic_hrv" />
 
+    <DataType
+        typeId="pace_hr_decoupling"
+        displayName="@string/pa_hr_decoupling_name"
+        description="@string/pa_hr_decoupling_description"
+        graphical="false"
+        sampleRate="1000"
+        unitName="%" />
+
+    <DataType
+        typeId="efficiency_factor"
+        displayName="@string/efficiency_factor_name"
+        description="@string/efficiency_factor_description"
+        graphical="false"
+        sampleRate="1000" />
+
+    <DataType
+        typeId="w_prime_balance"
+        displayName="@string/w_prime_balance_name"
+        description="@string/w_prime_balance_description"
+        graphical="false"
+        sampleRate="1000"
+        unitName="J" />
+
 </ExtensionInfo>

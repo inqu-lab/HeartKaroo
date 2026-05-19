@@ -1,11 +1,14 @@
 package com.inqulab.heartkaroo
 
 import com.inqulab.heartkaroo.decoupling.DecouplingDataType
+import com.inqulab.heartkaroo.decoupling.PaHrDecouplingDataType
+import com.inqulab.heartkaroo.efficiency.EfficiencyFactorDataType
 import com.inqulab.heartkaroo.hrv.DfaAlpha1DataType
 import com.inqulab.heartkaroo.hrv.HRVDataType
 import com.inqulab.heartkaroo.hrv.HRVStressDataType
 import com.inqulab.heartkaroo.hrv.HrvFlowDataType
 import com.inqulab.heartkaroo.hrv.PolarBleManager
+import com.inqulab.heartkaroo.wprime.WPrimeBalanceDataType
 import io.hammerhead.karooext.KarooSystemService
 import io.hammerhead.karooext.extension.KarooExtension
 import io.hammerhead.karooext.internal.Emitter
@@ -77,6 +80,9 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
     override val types by lazy {
         listOf(
             DecouplingDataType(this),
+            PaHrDecouplingDataType(this),
+            EfficiencyFactorDataType(this),
+            WPrimeBalanceDataType(this),
             HRVDataType(bleManager, EXTENSION_ID),
             HRVStressDataType(bleManager, EXTENSION_ID),
             DfaAlpha1DataType(bleManager, EXTENSION_ID),

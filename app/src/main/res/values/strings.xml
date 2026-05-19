@@ -36,6 +36,15 @@
     <string name="ectopic_rate_name">Irregular beats/min</string>
     <string name="ectopic_rate_description">Count per minute of RR intervals that deviate &gt;20 % from the previous accepted interval — a rough indicator of premature / ectopic beats. NOT a clinical diagnostic. If you see consistently high values at rest, consult a physician.</string>
 
+    <string name="pa_hr_decoupling_name">Pa:Hr Decoupling</string>
+    <string name="pa_hr_decoupling_description">Aerobic decoupling between speed (pace) and heart rate (%) over the last 30 min. Same Friel method as Pw:Hr Decoupling but for riders without a power meter (or runners). Reads — for the first 10 min.</string>
+
+    <string name="efficiency_factor_name">Efficiency Factor</string>
+    <string name="efficiency_factor_description">Coggan Efficiency Factor — Normalized Power divided by average heart rate over the last 30 min. Higher is more aerobically efficient. Compare across rides at similar intensity. Reads — for the first 10 min.</string>
+
+    <string name="w_prime_balance_name">W′ balance</string>
+    <string name="w_prime_balance_description">Skiba W′ balance — the joules of anaerobic capacity remaining (your "matches left"). Burns down above critical power, recovers exponentially below. Defaults: CP 250 W, W′ 20 000 J — personalise via a future settings screen.</string>
+
     <string name="intro_title">HeartKaroo</string>
     <string name="intro_body">This app adds three data fields to your Karoo:\n\n• Pw:Hr Decoupling — % drift between the first and second half of the last 30 min of riding (Friel method). &lt; 5% means well-coupled aerobic effort. Field reads — for the first 10 min while the window fills.\n\n• HRV (RMSSD) — real-time heart rate variability in ms, read directly from a Polar H10 over Bluetooth. Pair the strap under Sensors first.\n\n• HRV Stress % — live HRV compared against a rolling 20-min baseline. Reads — for the first 5 min while the baseline settles, then higher numbers mean HRV is depressed vs your in-ride trend.\n\nOn your Karoo:\n1. Edit a ride profile page\n2. Add a data field\n3. Pick \"Pw:Hr Decoupling\", \"HRV (RMSSD)\", or \"HRV Stress %\" under Extensions</string>
 </resources>
