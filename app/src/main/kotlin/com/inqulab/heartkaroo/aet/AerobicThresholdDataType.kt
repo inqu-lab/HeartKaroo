@@ -1,6 +1,7 @@
 package com.inqulab.heartkaroo.aet
 
 import com.inqulab.heartkaroo.HeartKarooExtension
+import com.inqulab.heartkaroo.karoo.streamDataFlow
 import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.internal.Emitter
 import io.hammerhead.karooext.models.DataPoint
@@ -23,8 +24,8 @@ import kotlinx.coroutines.launch
  * current estimate. Reads `--` until enough varied data has been seen.
  */
 class AerobicThresholdDataType(
-    private val extension: HeartKarooExtension,
-) : DataTypeImpl(extension.extension, TYPE_ID) {
+    private val parent: HeartKarooExtension,
+) : DataTypeImpl(parent.extension, TYPE_ID) {
 
     companion object {
         const val TYPE_ID = "aet_estimate"
@@ -36,7 +37,7 @@ class AerobicThresholdDataType(
         val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
         val powerJob: Job = scope.launch {
-            extension.karooSystem.streamDataFlow(DataType.Type.POWER).collect { ps ->
+            parent.karooSystem.streamDataFlow(DataType.Type.POWER).collect { ps ->
                 val p = (ps as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull()
                     ?: return@collect
                 calc.addPower(System.currentTimeMillis(), p)

@@ -1,6 +1,7 @@
 package com.inqulab.heartkaroo.power
 
 import com.inqulab.heartkaroo.HeartKarooExtension
+import com.inqulab.heartkaroo.karoo.streamDataFlow
 import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.internal.Emitter
 import io.hammerhead.karooext.models.DataPoint
@@ -14,8 +15,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 class KilojoulesDataType(
-    private val extension: HeartKarooExtension,
-) : DataTypeImpl(extension.extension, TYPE_ID) {
+    private val parent: HeartKarooExtension,
+) : DataTypeImpl(parent.extension, TYPE_ID) {
 
     companion object {
         const val TYPE_ID = "kilojoules"
@@ -26,7 +27,7 @@ class KilojoulesDataType(
         val calc = KilojoulesCalculator()
         val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         val job: Job = scope.launch {
-            extension.karooSystem.streamDataFlow(DataType.Type.POWER).collect { ps ->
+            parent.karooSystem.streamDataFlow(DataType.Type.POWER).collect { ps ->
                 val p = (ps as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull()
                     ?: return@collect
                 val kj = calc.add(System.currentTimeMillis(), p)

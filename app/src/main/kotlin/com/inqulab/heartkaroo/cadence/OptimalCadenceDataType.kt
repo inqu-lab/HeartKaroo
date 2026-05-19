@@ -1,6 +1,7 @@
 package com.inqulab.heartkaroo.cadence
 
 import com.inqulab.heartkaroo.HeartKarooExtension
+import com.inqulab.heartkaroo.karoo.streamDataFlow
 import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.internal.Emitter
 import io.hammerhead.karooext.models.DataPoint
@@ -20,8 +21,8 @@ import kotlinx.coroutines.launch
  * samples to compare.
  */
 class OptimalCadenceDataType(
-    private val extension: HeartKarooExtension,
-) : DataTypeImpl(extension.extension, TYPE_ID) {
+    private val parent: HeartKarooExtension,
+) : DataTypeImpl(parent.extension, TYPE_ID) {
 
     companion object {
         const val TYPE_ID = "optimal_cadence"
@@ -33,9 +34,9 @@ class OptimalCadenceDataType(
         val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         val job: Job = scope.launch {
             combine(
-                extension.karooSystem.streamDataFlow(DataType.Type.POWER),
-                extension.karooSystem.streamDataFlow(DataType.Type.HEART_RATE),
-                extension.karooSystem.streamDataFlow(DataType.Type.CADENCE),
+                parent.karooSystem.streamDataFlow(DataType.Type.POWER),
+                parent.karooSystem.streamDataFlow(DataType.Type.HEART_RATE),
+                parent.karooSystem.streamDataFlow(DataType.Type.CADENCE),
             ) { ps, hs, cs ->
                 Triple(
                     (ps as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull(),

@@ -1,6 +1,7 @@
 package com.inqulab.heartkaroo.efficiency
 
 import com.inqulab.heartkaroo.HeartKarooExtension
+import com.inqulab.heartkaroo.karoo.streamDataFlow
 import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.internal.Emitter
 import io.hammerhead.karooext.models.DataPoint
@@ -15,8 +16,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 class CardiacCostDataType(
-    private val extension: HeartKarooExtension,
-) : DataTypeImpl(extension.extension, TYPE_ID) {
+    private val parent: HeartKarooExtension,
+) : DataTypeImpl(parent.extension, TYPE_ID) {
 
     companion object {
         const val TYPE_ID = "cardiac_cost"
@@ -28,8 +29,8 @@ class CardiacCostDataType(
         val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         val job: Job = scope.launch {
             combine(
-                extension.karooSystem.streamDataFlow(DataType.Type.POWER),
-                extension.karooSystem.streamDataFlow(DataType.Type.HEART_RATE),
+                parent.karooSystem.streamDataFlow(DataType.Type.POWER),
+                parent.karooSystem.streamDataFlow(DataType.Type.HEART_RATE),
             ) { ps, hs ->
                 Pair(
                     (ps as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull(),

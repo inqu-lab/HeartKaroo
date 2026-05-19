@@ -1,6 +1,7 @@
 package com.inqulab.heartkaroo.wprime
 
 import com.inqulab.heartkaroo.HeartKarooExtension
+import com.inqulab.heartkaroo.karoo.streamDataFlow
 import com.inqulab.heartkaroo.settings.RiderSettings
 import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.internal.Emitter
@@ -21,8 +22,8 @@ import kotlinx.coroutines.launch
  * on the next field subscription.
  */
 class WPrimeBalanceDataType(
-    private val extension: HeartKarooExtension,
-) : DataTypeImpl(extension.extension, TYPE_ID) {
+    private val parent: HeartKarooExtension,
+) : DataTypeImpl(parent.extension, TYPE_ID) {
 
     companion object {
         const val TYPE_ID = "w_prime_balance"
@@ -37,7 +38,7 @@ class WPrimeBalanceDataType(
         )
         val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         val job: Job = scope.launch {
-            extension.karooSystem.streamDataFlow(DataType.Type.POWER).collect { ps ->
+            parent.karooSystem.streamDataFlow(DataType.Type.POWER).collect { ps ->
                 val p = (ps as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull() ?: return@collect
                 val balance = calc.add(System.currentTimeMillis(), p)
                 emitter.onNext(

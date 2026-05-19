@@ -1,6 +1,7 @@
 package com.inqulab.heartkaroo.power
 
 import com.inqulab.heartkaroo.HeartKarooExtension
+import com.inqulab.heartkaroo.karoo.streamDataFlow
 import com.inqulab.heartkaroo.settings.RiderSettings
 import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.internal.Emitter
@@ -16,8 +17,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 class QuadrantAnalysisDataType(
-    private val extension: HeartKarooExtension,
-) : DataTypeImpl(extension.extension, TYPE_ID) {
+    private val parent: HeartKarooExtension,
+) : DataTypeImpl(parent.extension, TYPE_ID) {
 
     companion object {
         const val TYPE_ID = "quadrant"
@@ -30,8 +31,8 @@ class QuadrantAnalysisDataType(
         val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         val job: Job = scope.launch {
             combine(
-                extension.karooSystem.streamDataFlow(DataType.Type.POWER),
-                extension.karooSystem.streamDataFlow(DataType.Type.CADENCE),
+                parent.karooSystem.streamDataFlow(DataType.Type.POWER),
+                parent.karooSystem.streamDataFlow(DataType.Type.CADENCE),
             ) { ps, cs ->
                 Pair(
                     (ps as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull(),

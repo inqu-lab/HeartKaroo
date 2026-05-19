@@ -4,7 +4,7 @@
     <string name="extension_name">HeartKaroo</string>
 
     <string name="decoupling_name">Pw:Hr Decoupling</string>
-    <string name="decoupling_description">Real-time aerobic decoupling between power and heart rate (%). Lower is better; under 5% indicates well-coupled aerobic effort.</string>
+    <string name="decoupling_description" formatted="false">Real-time aerobic decoupling between power and heart rate (%). Lower is better; under 5% indicates well-coupled aerobic effort.</string>
 
     <string name="hrv_rmssd_name">HRV (RMSSD)</string>
     <string name="hrv_rmssd_description">Heart Rate Variability — RMSSD in milliseconds, calculated from Polar H10 RR intervals via Bluetooth</string>
