@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ExtensionInfo
+    id="heartkaroo"
+    displayName="@string/extension_name"
+    icon="@drawable/ic_hrv"
+    scansDevices="true"
+    fitFile="true">
+
+    <DataType
+        typeId="decoupling"
+        displayName="@string/decoupling_name"
+        description="@string/decoupling_description"
+        graphical="false"
+        sampleRate="1000"
+        unitName="%" />
+
+    <DataType
+        typeId="hrv_rmssd"
+        displayName="@string/hrv_rmssd_name"
+        description="@string/hrv_rmssd_description"
+        graphical="false"
+        icon="@drawable/ic_hrv" />
+
+</ExtensionInfo>
