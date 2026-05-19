@@ -3,10 +3,19 @@ package com.inqulab.heartkaroo
 import com.inqulab.heartkaroo.aet.AerobicThresholdCalibrator
 import com.inqulab.heartkaroo.aet.AerobicThresholdDataType
 import com.inqulab.heartkaroo.aet.AerobicThresholdStore
+import com.inqulab.heartkaroo.climb.VamDataType
 import com.inqulab.heartkaroo.decoupling.CardiacPopDataType
 import com.inqulab.heartkaroo.decoupling.DecouplingDataType
 import com.inqulab.heartkaroo.decoupling.PaHrDecouplingDataType
+import com.inqulab.heartkaroo.efficiency.CardiacCostDataType
 import com.inqulab.heartkaroo.efficiency.EfficiencyFactorDataType
+import com.inqulab.heartkaroo.power.CoastingDataType
+import com.inqulab.heartkaroo.power.IntensityFactorDataType
+import com.inqulab.heartkaroo.power.KilojoulesDataType
+import com.inqulab.heartkaroo.power.MmpDataType
+import com.inqulab.heartkaroo.power.QuadrantAnalysisDataType
+import com.inqulab.heartkaroo.power.TssDataType
+import com.inqulab.heartkaroo.power.VariabilityIndexDataType
 import com.inqulab.heartkaroo.hrv.DfaAlpha1DataType
 import com.inqulab.heartkaroo.hrv.HRVDataType
 import com.inqulab.heartkaroo.hrv.HRVStressDataType
@@ -96,9 +105,22 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             DecouplingDataType(this),
             PaHrDecouplingDataType(this),
             EfficiencyFactorDataType(this),
+            CardiacCostDataType(this),
             WPrimeBalanceDataType(this),
             CardiacPopDataType(this),
             AerobicThresholdDataType(this),
+            VariabilityIndexDataType(this),
+            IntensityFactorDataType(this),
+            TssDataType(this),
+            KilojoulesDataType(this),
+            CoastingDataType(this),
+            QuadrantAnalysisDataType(this),
+            VamDataType(this),
+            MmpDataType(this, 5_000L, "mmp_5s"),
+            MmpDataType(this, 60_000L, "mmp_1min"),
+            MmpDataType(this, 5L * 60 * 1000, "mmp_5min"),
+            MmpDataType(this, 20L * 60 * 1000, "mmp_20min"),
+            MmpDataType(this, 60L * 60 * 1000, "mmp_60min"),
             HRVDataType(bleManager, EXTENSION_ID),
             HRVStressDataType(bleManager, EXTENSION_ID),
             DfaAlpha1DataType(bleManager, EXTENSION_ID),

@@ -54,6 +54,41 @@
     <string name="readiness_aet_fmt">Rolling AeT estimate: %1$d W  (%2$d rides)</string>
     <string name="readiness_aet_none">No AeT estimate yet — ride with DFA α1 enabled and the strap paired.</string>
 
+    <string name="variability_index_name">Variability Index</string>
+    <string name="variability_index_description">NP / AP — how spiky the ride is. 1.00 = perfectly steady, &gt; 1.10 = punchy / crit-style. Useful for separating "endurance ride" from "interval session" post-hoc.</string>
+
+    <string name="intensity_factor_name">Intensity Factor</string>
+    <string name="intensity_factor_description">Coggan Intensity Factor — NP divided by your FTP. 0.65 = endurance, 0.85 = sweet-spot, 1.00 = at threshold. Default FTP 270 W — adjust in settings.</string>
+
+    <string name="tss_name">Training Stress Score</string>
+    <string name="tss_description">Live cumulative Training Stress Score. TSS = hours × IF² × 100. Builds through the ride; 100 = a one-hour all-out FTP effort.</string>
+
+    <string name="kilojoules_name">Kilojoules</string>
+    <string name="kilojoules_description">Cumulative mechanical work done, integrated from the power stream. Approximately equal to dietary Calories burned at typical cycling efficiency.</string>
+
+    <string name="coasting_pct_name">Coasting %</string>
+    <string name="coasting_pct_description">Percentage of ride time spent at &lt;5 W (freewheeling). Most riders coast more than they think.</string>
+
+    <string name="quadrant_name">Quadrant</string>
+    <string name="quadrant_description">Coggan quadrant analysis from power + cadence. 1 = aerobic, 2 = grinder (high force, low cadence), 3 = recovery, 4 = spinning. Reports the dominant quadrant over the last 60 s.</string>
+
+    <string name="vam_name">VAM</string>
+    <string name="vam_description">Vertical Ascent Meters per hour — the standard climbing-speed metric. Computed over the last 60 s of elevation gain.</string>
+
+    <string name="cardiac_cost_name">Cardiac cost</string>
+    <string name="cardiac_cost_description">Average HR per watt over the last 30 min — the inverse of Efficiency Factor, expressed as bpm/W. Lower is more efficient. Same information as EF but with a more intuitive scale.</string>
+
+    <string name="mmp_5s_name">Best 5 s power</string>
+    <string name="mmp_5s_description">Highest 5-second mean power achieved so far in this ride. Sprint capacity indicator.</string>
+    <string name="mmp_1min_name">Best 1 min power</string>
+    <string name="mmp_1min_description">Highest 1-minute mean power so far in this ride. Anaerobic / VO₂max capacity.</string>
+    <string name="mmp_5min_name">Best 5 min power</string>
+    <string name="mmp_5min_description">Highest 5-minute mean power so far in this ride. VO₂max region.</string>
+    <string name="mmp_20min_name">Best 20 min power</string>
+    <string name="mmp_20min_description">Highest 20-minute mean power so far in this ride. Classic FTP-test duration; ≈95 % gives an FTP estimate.</string>
+    <string name="mmp_60min_name">Best 60 min power</string>
+    <string name="mmp_60min_description">Highest 60-minute mean power so far in this ride — closest single-number proxy for true FTP.</string>
+
     <string name="readiness_button">Take HRV readiness reading</string>
     <string name="readiness_title">HRV Readiness</string>
     <string name="readiness_body">Take a 2-minute resting reading with your H10 before clipping in. Compared against your rolling 7-day average to suggest whether to go hard or take it easy.\n\nSit still, breathe normally, and don\'t talk.</string>

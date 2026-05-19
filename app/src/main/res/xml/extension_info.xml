@@ -130,4 +130,104 @@
         sampleRate="1000"
         unitName="W" />
 
+    <DataType
+        typeId="variability_index"
+        displayName="@string/variability_index_name"
+        description="@string/variability_index_description"
+        graphical="false"
+        sampleRate="1000" />
+
+    <DataType
+        typeId="intensity_factor"
+        displayName="@string/intensity_factor_name"
+        description="@string/intensity_factor_description"
+        graphical="false"
+        sampleRate="1000" />
+
+    <DataType
+        typeId="tss"
+        displayName="@string/tss_name"
+        description="@string/tss_description"
+        graphical="false"
+        sampleRate="1000" />
+
+    <DataType
+        typeId="kilojoules"
+        displayName="@string/kilojoules_name"
+        description="@string/kilojoules_description"
+        graphical="false"
+        sampleRate="1000"
+        unitName="kJ" />
+
+    <DataType
+        typeId="coasting_pct"
+        displayName="@string/coasting_pct_name"
+        description="@string/coasting_pct_description"
+        graphical="false"
+        sampleRate="1000"
+        unitName="%" />
+
+    <DataType
+        typeId="quadrant"
+        displayName="@string/quadrant_name"
+        description="@string/quadrant_description"
+        graphical="false"
+        sampleRate="1000" />
+
+    <DataType
+        typeId="vam"
+        displayName="@string/vam_name"
+        description="@string/vam_description"
+        graphical="false"
+        sampleRate="1000"
+        unitName="m/h" />
+
+    <DataType
+        typeId="cardiac_cost"
+        displayName="@string/cardiac_cost_name"
+        description="@string/cardiac_cost_description"
+        graphical="false"
+        sampleRate="1000"
+        unitName="bpm/W" />
+
+    <DataType
+        typeId="mmp_5s"
+        displayName="@string/mmp_5s_name"
+        description="@string/mmp_5s_description"
+        graphical="false"
+        sampleRate="1000"
+        unitName="W" />
+
+    <DataType
+        typeId="mmp_1min"
+        displayName="@string/mmp_1min_name"
+        description="@string/mmp_1min_description"
+        graphical="false"
+        sampleRate="1000"
+        unitName="W" />
+
+    <DataType
+        typeId="mmp_5min"
+        displayName="@string/mmp_5min_name"
+        description="@string/mmp_5min_description"
+        graphical="false"
+        sampleRate="1000"
+        unitName="W" />
+
+    <DataType
+        typeId="mmp_20min"
+        displayName="@string/mmp_20min_name"
+        description="@string/mmp_20min_description"
+        graphical="false"
+        sampleRate="1000"
+        unitName="W" />
+
+    <DataType
+        typeId="mmp_60min"
+        displayName="@string/mmp_60min_name"
+        description="@string/mmp_60min_description"
+        graphical="false"
+        sampleRate="1000"
+        unitName="W" />
+
 </ExtensionInfo>

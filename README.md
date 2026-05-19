@@ -14,9 +14,23 @@ No cloud, no Polar SDK, no network access.
 | Pw:Hr Decoupling | `decoupling` | Real-time aerobic decoupling (%) over a rolling 30-min window (Friel method). |
 | Pa:Hr Decoupling | `pace_hr_decoupling` | Same method but speed-vs-HR — works for riders without a power meter, and for runners. |
 | Efficiency Factor | `efficiency_factor` | Coggan NP / avg HR over the last 30 min. Higher is more aerobically efficient. |
+| Cardiac cost | `cardiac_cost` | HR/W average over the last 30 min — inverse of EF, more intuitive scale. |
 | W′ balance | `w_prime_balance` | Skiba 2012 "matches left" anaerobic capacity in joules. Defaults: CP 250 W, W′ 20 000 J. |
 | Cardiac pop @ min | `cardiac_pop_minute` | Latches the minute at which decoupling first sustains above 5%. |
 | AeT estimate | `aet_estimate` | Live aerobic-threshold power (watts) — fits DFA α1 vs power and solves for α1 = 0.75. Per-ride finals are persisted; the rolling mean shows on the Readiness screen. |
+
+### Power analytics
+
+| Data field | ID | Description |
+|---|---|---|
+| Variability Index | `variability_index` | NP / AP. Spiky ride indicator. |
+| Intensity Factor | `intensity_factor` | NP / FTP. Default FTP 270 W. |
+| Training Stress Score | `tss` | Live cumulative TSS. |
+| Kilojoules | `kilojoules` | Cumulative mechanical work. |
+| Coasting % | `coasting_pct` | % of ride time at &lt;5 W. |
+| Quadrant | `quadrant` | Coggan quadrant analysis (1-4) from power+cadence. |
+| Best 5 s / 1 min / 5 min / 20 min / 60 min power | `mmp_5s` / `mmp_1min` / `mmp_5min` / `mmp_20min` / `mmp_60min` | Highest mean power for that duration seen so far in the ride. |
+| VAM | `vam` | Vertical Ascent Meters per hour over the last 60 s of elevation gain. |
 
 ### HRV (from the BLE strap)
 
@@ -168,6 +182,18 @@ app/src/main/kotlin/com/inqulab/heartkaroo/
 │   ├── AerobicThresholdCalibrator.kt   α1-vs-power linear fit → AeT
 │   ├── AerobicThresholdStore.kt        SharedPreferences rolling history
 │   └── AerobicThresholdDataType.kt     Live AeT field
+├── power/
+│   ├── NormalizedPowerCalculator.kt    NP + AP shared by VI/IF/TSS
+│   ├── KilojoulesCalculator.kt
+│   ├── CoastingCalculator.kt
+│   ├── MmpCalculator.kt                Per-duration best mean power
+│   ├── QuadrantAnalysisCalculator.kt   Force × CPV quadrants
+│   └── *DataType.kt                    VI, IF, TSS, kJ, Coast %, MMP, Quadrant
+├── climb/
+│   ├── VamCalculator.kt
+│   └── VamDataType.kt
+├── settings/
+│   └── RiderSettings.kt                FTP / CP / W′ / HRmax / weight prefs
 ├── readiness/
 │   ├── ReadinessStore.kt           SharedPreferences-backed baseline
 │   └── ReadinessActivity.kt        2-min resting RMSSD UI
