@@ -1,6 +1,7 @@
 package com.inqulab.heartkaroo
 
 import com.inqulab.heartkaroo.decoupling.DecouplingDataType
+import com.inqulab.heartkaroo.hrv.DfaAlpha1DataType
 import com.inqulab.heartkaroo.hrv.HRVDataType
 import com.inqulab.heartkaroo.hrv.HRVStressDataType
 import com.inqulab.heartkaroo.hrv.PolarBleManager
@@ -43,6 +44,13 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             fieldName = "hrv_stress_pct",
             units = "pct",
         )
+
+        val DFA_ALPHA1_FIELD = DeveloperField(
+            fieldDefinitionNumber = 2,
+            fitBaseTypeId = 136,
+            fieldName = "dfa_alpha1",
+            units = "",
+        )
     }
 
     lateinit var karooSystem: KarooSystemService
@@ -56,6 +64,7 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             DecouplingDataType(this),
             HRVDataType(bleManager, EXTENSION_ID),
             HRVStressDataType(bleManager, EXTENSION_ID),
+            DfaAlpha1DataType(bleManager, EXTENSION_ID),
         )
     }
 
@@ -120,9 +129,17 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
                     emitter.onNext(WriteToRecordMesg(FieldValue(STRESS_FIELD, stress.toDouble())))
                 }
         }
+        val dfaJob: Job = scope.launch {
+            bleManager.dfaAlpha1Flow
+                .filterNotNull()
+                .collect { alpha ->
+                    emitter.onNext(WriteToRecordMesg(FieldValue(DFA_ALPHA1_FIELD, alpha.toDouble())))
+                }
+        }
         emitter.setCancellable {
             rmssdJob.cancel()
             stressJob.cancel()
+            dfaJob.cancel()
         }
     }
 

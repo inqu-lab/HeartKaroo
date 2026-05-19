@@ -52,6 +52,10 @@ class PolarBleManager(private val context: Context) {
     val stressFlow: StateFlow<Float?> = _stressFlow.asStateFlow()
     private val stressCalculator = HRVStressCalculator()
 
+    private val _dfaAlpha1Flow = MutableStateFlow<Float?>(null)
+    val dfaAlpha1Flow: StateFlow<Float?> = _dfaAlpha1Flow.asStateFlow()
+    private val dfaCalculator = DfaAlpha1Calculator()
+
     fun startDeviceScan(onDevice: (BluetoothDevice) -> Unit): () -> Unit {
         val leScanner = bluetoothAdapter?.bluetoothLeScanner ?: return {}
         val seenAddresses = mutableSetOf<String>()
@@ -132,12 +136,16 @@ class PolarBleManager(private val context: Context) {
                 scope.trySend(BleEvent.Heartrate(parsed.bpm))
                 for (rr in parsed.rrIntervalsMs) {
                     calculator.addInterval(rr)
+                    dfaCalculator.addInterval(rr)
                 }
                 if (parsed.rrIntervalsMs.isNotEmpty() && calculator.hasData) {
                     val rmssd = calculator.getRmssd()
                     _rmssdFlow.value = rmssd
                     stressCalculator.addRmssd(rmssd)
                     _stressFlow.value = stressCalculator.getStressPct()
+                }
+                if (parsed.rrIntervalsMs.isNotEmpty()) {
+                    _dfaAlpha1Flow.value = dfaCalculator.getAlpha1()
                 }
             }
         }

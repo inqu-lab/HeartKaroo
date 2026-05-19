@@ -21,4 +21,19 @@
         graphical="false"
         icon="@drawable/ic_hrv" />
 
+    <DataType
+        typeId="hrv_stress"
+        displayName="@string/hrv_stress_name"
+        description="@string/hrv_stress_description"
+        graphical="false"
+        unitName="%"
+        icon="@drawable/ic_hrv" />
+
+    <DataType
+        typeId="dfa_alpha1"
+        displayName="@string/dfa_alpha1_name"
+        description="@string/dfa_alpha1_description"
+        graphical="false"
+        icon="@drawable/ic_hrv" />
+
 </ExtensionInfo>
