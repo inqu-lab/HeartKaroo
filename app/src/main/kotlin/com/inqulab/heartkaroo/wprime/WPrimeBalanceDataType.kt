@@ -31,7 +31,7 @@ class WPrimeBalanceDataType(
     }
 
     override fun startStream(emitter: Emitter<StreamState>) {
-        val settings = RiderSettings(extension.applicationContext)
+        val settings = RiderSettings(parent.applicationContext)
         val calc = WPrimeBalanceCalculator(
             criticalPowerW = settings.criticalPowerW.toDouble(),
             wPrimeJ = settings.wPrimeJ.toDouble(),

@@ -6,12 +6,12 @@ plugins {
 
 android {
     namespace = "com.inqulab.heartkaroo"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.inqulab.heartkaroo"
-        minSdk = 26
-        targetSdk = 35
+        minSdk = 25
+        targetSdk = 37
         versionCode = 1
         versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

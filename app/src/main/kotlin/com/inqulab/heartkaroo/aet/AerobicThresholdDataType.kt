@@ -44,7 +44,7 @@ class AerobicThresholdDataType(
             }
         }
         val alphaJob: Job = scope.launch {
-            extension.bleManager.dfaAlpha1Flow.filterNotNull().collect { a ->
+            parent.bleManager.dfaAlpha1Flow.filterNotNull().collect { a ->
                 calc.addAlpha(a)
                 val est = calc.currentEstimate()
                 val state = if (est == null) StreamState.NotAvailable

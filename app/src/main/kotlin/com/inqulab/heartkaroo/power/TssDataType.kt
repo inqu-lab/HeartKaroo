@@ -34,7 +34,7 @@ class TssDataType(
     override fun startStream(emitter: Emitter<StreamState>) {
         // Window the whole ride (4 h) — TSS is cumulative.
         val np = NormalizedPowerCalculator(windowMs = 4 * 60 * 60 * 1000L)
-        val settings = RiderSettings(extension.applicationContext)
+        val settings = RiderSettings(parent.applicationContext)
         val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         val job: Job = scope.launch {
             parent.karooSystem.streamDataFlow(DataType.Type.POWER).collect { ps ->

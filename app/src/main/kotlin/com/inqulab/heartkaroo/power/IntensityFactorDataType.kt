@@ -26,7 +26,7 @@ class IntensityFactorDataType(
 
     override fun startStream(emitter: Emitter<StreamState>) {
         val np = NormalizedPowerCalculator()
-        val settings = RiderSettings(extension.applicationContext)
+        val settings = RiderSettings(parent.applicationContext)
         val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         val job: Job = scope.launch {
             parent.karooSystem.streamDataFlow(DataType.Type.POWER).collect { ps ->

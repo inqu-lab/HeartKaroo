@@ -26,7 +26,7 @@ class QuadrantAnalysisDataType(
     }
 
     override fun startStream(emitter: Emitter<StreamState>) {
-        val settings = RiderSettings(extension.applicationContext)
+        val settings = RiderSettings(parent.applicationContext)
         val calc = QuadrantAnalysisCalculator(ftpW = settings.ftpW.toDouble())
         val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         val job: Job = scope.launch {
