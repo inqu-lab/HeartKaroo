@@ -15,6 +15,27 @@
     <string name="dfa_alpha1_name">DFA α1</string>
     <string name="dfa_alpha1_description">Detrended Fluctuation Analysis short-term scaling exponent. ≈1.0 at easy aerobic effort, drops toward 0.5 above threshold. 0.75 is widely used as a non-invasive aerobic-threshold marker (Rogell et al., 2021). Needs ~2 min of RR data before it reads.</string>
 
+    <string name="hrv_sdnn_name">HRV (SDNN)</string>
+    <string name="hrv_sdnn_description">Standard deviation of RR intervals (ms) over a sliding 60-beat window. Captures overall HRV including longer-term variability that RMSSD misses.</string>
+
+    <string name="hrv_pnn50_name">HRV pNN50</string>
+    <string name="hrv_pnn50_description">Percentage of successive RR-interval differences exceeding 50 ms — a classic parasympathetic / vagal-tone marker. Drops sharply with exercise intensity.</string>
+
+    <string name="hrv_sd1_name">Poincaré SD1</string>
+    <string name="hrv_sd1_description">Short-term Poincaré-plot standard deviation (ms). Reflects beat-to-beat (parasympathetic) variability. Sliding 60-beat window.</string>
+
+    <string name="hrv_sd2_name">Poincaré SD2</string>
+    <string name="hrv_sd2_description">Long-term Poincaré-plot standard deviation (ms). Reflects total HRV including slower fluctuations. Sliding 60-beat window.</string>
+
+    <string name="hrv_sd1_sd2_ratio_name">Poincaré SD1/SD2</string>
+    <string name="hrv_sd1_sd2_ratio_description">Ratio of short- to long-term Poincaré standard deviations — a parasympathetic-vs-sympathetic balance indicator. Lower at higher intensity.</string>
+
+    <string name="respiratory_rate_name">Resp rate</string>
+    <string name="respiratory_rate_description">Breaths per minute derived from respiratory sinus arrhythmia in the RR-interval stream. No chest strap or face mask required. Accuracy degrades at very high intensities when RSA collapses.</string>
+
+    <string name="ectopic_rate_name">Irregular beats/min</string>
+    <string name="ectopic_rate_description">Count per minute of RR intervals that deviate &gt;20 % from the previous accepted interval — a rough indicator of premature / ectopic beats. NOT a clinical diagnostic. If you see consistently high values at rest, consult a physician.</string>
+
     <string name="intro_title">HeartKaroo</string>
     <string name="intro_body">This app adds three data fields to your Karoo:\n\n• Pw:Hr Decoupling — % drift between the first and second half of the last 30 min of riding (Friel method). &lt; 5% means well-coupled aerobic effort. Field reads — for the first 10 min while the window fills.\n\n• HRV (RMSSD) — real-time heart rate variability in ms, read directly from a Polar H10 over Bluetooth. Pair the strap under Sensors first.\n\n• HRV Stress % — live HRV compared against a rolling 20-min baseline. Reads — for the first 5 min while the baseline settles, then higher numbers mean HRV is depressed vs your in-ride trend.\n\nOn your Karoo:\n1. Edit a ride profile page\n2. Add a data field\n3. Pick \"Pw:Hr Decoupling\", \"HRV (RMSSD)\", or \"HRV Stress %\" under Extensions</string>
 </resources>

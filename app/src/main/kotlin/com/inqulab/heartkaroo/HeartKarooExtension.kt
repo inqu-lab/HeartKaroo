@@ -4,6 +4,7 @@ import com.inqulab.heartkaroo.decoupling.DecouplingDataType
 import com.inqulab.heartkaroo.hrv.DfaAlpha1DataType
 import com.inqulab.heartkaroo.hrv.HRVDataType
 import com.inqulab.heartkaroo.hrv.HRVStressDataType
+import com.inqulab.heartkaroo.hrv.HrvFlowDataType
 import com.inqulab.heartkaroo.hrv.PolarBleManager
 import io.hammerhead.karooext.KarooSystemService
 import io.hammerhead.karooext.extension.KarooExtension
@@ -51,6 +52,20 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             fieldName = "dfa_alpha1",
             units = "",
         )
+
+        val RESPIRATORY_RATE_FIELD = DeveloperField(
+            fieldDefinitionNumber = 3,
+            fitBaseTypeId = 136,
+            fieldName = "respiratory_rate",
+            units = "brpm",
+        )
+
+        val SDNN_FIELD = DeveloperField(
+            fieldDefinitionNumber = 4,
+            fitBaseTypeId = 136,
+            fieldName = "sdnn",
+            units = "ms",
+        )
     }
 
     lateinit var karooSystem: KarooSystemService
@@ -65,6 +80,13 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             HRVDataType(bleManager, EXTENSION_ID),
             HRVStressDataType(bleManager, EXTENSION_ID),
             DfaAlpha1DataType(bleManager, EXTENSION_ID),
+            HrvFlowDataType(EXTENSION_ID, "hrv_sdnn", bleManager.sdnnFlow),
+            HrvFlowDataType(EXTENSION_ID, "hrv_pnn50", bleManager.pnn50Flow),
+            HrvFlowDataType(EXTENSION_ID, "hrv_sd1", bleManager.sd1Flow),
+            HrvFlowDataType(EXTENSION_ID, "hrv_sd2", bleManager.sd2Flow),
+            HrvFlowDataType(EXTENSION_ID, "hrv_sd1_sd2_ratio", bleManager.sd1Sd2RatioFlow),
+            HrvFlowDataType(EXTENSION_ID, "respiratory_rate", bleManager.respiratoryRateFlow),
+            HrvFlowDataType(EXTENSION_ID, "ectopic_rate", bleManager.ectopicRateFlow),
         )
     }
 
@@ -136,10 +158,26 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
                     emitter.onNext(WriteToRecordMesg(FieldValue(DFA_ALPHA1_FIELD, alpha.toDouble())))
                 }
         }
+        val respJob: Job = scope.launch {
+            bleManager.respiratoryRateFlow
+                .filterNotNull()
+                .collect { brpm ->
+                    emitter.onNext(WriteToRecordMesg(FieldValue(RESPIRATORY_RATE_FIELD, brpm.toDouble())))
+                }
+        }
+        val sdnnJob: Job = scope.launch {
+            bleManager.sdnnFlow
+                .filterNotNull()
+                .collect { sdnn ->
+                    emitter.onNext(WriteToRecordMesg(FieldValue(SDNN_FIELD, sdnn.toDouble())))
+                }
+        }
         emitter.setCancellable {
             rmssdJob.cancel()
             stressJob.cancel()
             dfaJob.cancel()
+            respJob.cancel()
+            sdnnJob.cancel()
         }
     }
 
