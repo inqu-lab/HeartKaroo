@@ -1,6 +1,7 @@
 package com.inqulab.heartkaroo.climb
 
 import com.inqulab.heartkaroo.HeartKarooExtension
+import com.inqulab.heartkaroo.karoo.streamDataFlow
 import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.internal.Emitter
 import io.hammerhead.karooext.models.DataPoint
@@ -14,8 +15,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 class VamDataType(
-    private val extension: HeartKarooExtension,
-) : DataTypeImpl(extension.extension, TYPE_ID) {
+    private val parent: HeartKarooExtension,
+) : DataTypeImpl(parent.extension, TYPE_ID) {
 
     companion object {
         const val TYPE_ID = "vam"
@@ -26,7 +27,7 @@ class VamDataType(
         val calc = VamCalculator()
         val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         val job: Job = scope.launch {
-            extension.karooSystem.streamDataFlow(DataType.Type.ELEVATION).collect { es ->
+            parent.karooSystem.streamDataFlow(DataType.Type.ELEVATION_GAIN).collect { es ->
                 val e = (es as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull()
                     ?: return@collect
                 val v = calc.add(System.currentTimeMillis(), e)

@@ -1,6 +1,7 @@
 package com.inqulab.heartkaroo.decoupling
 
 import com.inqulab.heartkaroo.HeartKarooExtension
+import com.inqulab.heartkaroo.karoo.streamDataFlow
 import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.internal.Emitter
 import io.hammerhead.karooext.models.DataPoint
@@ -22,8 +23,8 @@ import kotlinx.coroutines.launch
  * per second.
  */
 class DecouplingDataType(
-    private val extension: HeartKarooExtension,
-) : DataTypeImpl(extension.extension, TYPE_ID) {
+    private val parent: HeartKarooExtension,
+) : DataTypeImpl(parent.extension, TYPE_ID) {
 
     companion object {
         const val TYPE_ID = "decoupling"
@@ -36,8 +37,8 @@ class DecouplingDataType(
 
         val job: Job = scope.launch {
             combine(
-                extension.karooSystem.streamDataFlow(DataType.Type.POWER),
-                extension.karooSystem.streamDataFlow(DataType.Type.HEART_RATE),
+                parent.karooSystem.streamDataFlow(DataType.Type.POWER),
+                parent.karooSystem.streamDataFlow(DataType.Type.HEART_RATE),
             ) { powerState, hrState ->
                 val p = (powerState as? StreamState.Streaming)?.dataPoint?.singleValue
                 val h = (hrState as? StreamState.Streaming)?.dataPoint?.singleValue

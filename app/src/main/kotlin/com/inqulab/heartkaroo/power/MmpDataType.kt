@@ -1,6 +1,7 @@
 package com.inqulab.heartkaroo.power
 
 import com.inqulab.heartkaroo.HeartKarooExtension
+import com.inqulab.heartkaroo.karoo.streamDataFlow
 import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.internal.Emitter
 import io.hammerhead.karooext.models.DataPoint
@@ -14,16 +15,16 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 class MmpDataType(
-    private val extension: HeartKarooExtension,
+    private val parent: HeartKarooExtension,
     private val durationMs: Long,
     typeId: String,
-) : DataTypeImpl(extension.extension, typeId) {
+) : DataTypeImpl(parent.extension, typeId) {
 
     override fun startStream(emitter: Emitter<StreamState>) {
         val calc = MmpCalculator(durationMs)
         val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         val job: Job = scope.launch {
-            extension.karooSystem.streamDataFlow(DataType.Type.POWER).collect { ps ->
+            parent.karooSystem.streamDataFlow(DataType.Type.POWER).collect { ps ->
                 val p = (ps as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull()
                     ?: return@collect
                 val v = calc.add(System.currentTimeMillis(), p)

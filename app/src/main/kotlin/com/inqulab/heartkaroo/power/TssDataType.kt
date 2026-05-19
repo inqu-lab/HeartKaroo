@@ -1,6 +1,7 @@
 package com.inqulab.heartkaroo.power
 
 import com.inqulab.heartkaroo.HeartKarooExtension
+import com.inqulab.heartkaroo.karoo.streamDataFlow
 import com.inqulab.heartkaroo.settings.RiderSettings
 import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.internal.Emitter
@@ -22,8 +23,8 @@ import kotlinx.coroutines.launch
  * elapsed window and FTP from RiderSettings.
  */
 class TssDataType(
-    private val extension: HeartKarooExtension,
-) : DataTypeImpl(extension.extension, TYPE_ID) {
+    private val parent: HeartKarooExtension,
+) : DataTypeImpl(parent.extension, TYPE_ID) {
 
     companion object {
         const val TYPE_ID = "tss"
@@ -33,10 +34,10 @@ class TssDataType(
     override fun startStream(emitter: Emitter<StreamState>) {
         // Window the whole ride (4 h) — TSS is cumulative.
         val np = NormalizedPowerCalculator(windowMs = 4 * 60 * 60 * 1000L)
-        val settings = RiderSettings(extension.applicationContext)
+        val settings = RiderSettings(parent.applicationContext)
         val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         val job: Job = scope.launch {
-            extension.karooSystem.streamDataFlow(DataType.Type.POWER).collect { ps ->
+            parent.karooSystem.streamDataFlow(DataType.Type.POWER).collect { ps ->
                 val p = (ps as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull()
                     ?: return@collect
                 np.add(System.currentTimeMillis(), p)
