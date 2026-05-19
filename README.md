@@ -16,6 +16,7 @@ No cloud, no Polar SDK, no network access.
 | Efficiency Factor | `efficiency_factor` | Coggan NP / avg HR over the last 30 min. Higher is more aerobically efficient. |
 | W′ balance | `w_prime_balance` | Skiba 2012 "matches left" anaerobic capacity in joules. Defaults: CP 250 W, W′ 20 000 J. |
 | Cardiac pop @ min | `cardiac_pop_minute` | Latches the minute at which decoupling first sustains above 5%. |
+| AeT estimate | `aet_estimate` | Live aerobic-threshold power (watts) — fits DFA α1 vs power and solves for α1 = 0.75. Per-ride finals are persisted; the rolling mean shows on the Readiness screen. |
 
 ### HRV (from the BLE strap)
 
@@ -41,6 +42,7 @@ Recorded alongside the standard HR record when the strap is active:
 | `dfa_alpha1` | (dimensionless) |
 | `respiratory_rate` | brpm |
 | `sdnn` | ms |
+| `aet_estimate` | watts |
 
 The other secondary HRV metrics (pNN50, SD1/SD2, ectopic rate) are
 derivable post-ride from the recorded RR data, so they stay as
@@ -52,7 +54,8 @@ live-display-only.
 - **HRV Readiness** — a 2-minute pre-ride resting RMSSD measurement,
   compared against a rolling 7-day baseline (lnRMSSD, z-score) and
   surfaced as a "go hard / go easy / normal" verdict. Baseline lives in
-  `SharedPreferences` and updates each time you measure.
+  `SharedPreferences` and updates each time you measure. Also displays
+  the rolling AeT estimate accumulated from previous rides.
 
 ## How it works
 
@@ -161,6 +164,10 @@ app/src/main/kotlin/com/inqulab/heartkaroo/
 ├── wprime/
 │   ├── WPrimeBalanceCalculator.kt  Skiba 2012 model
 │   └── WPrimeBalanceDataType.kt
+├── aet/
+│   ├── AerobicThresholdCalibrator.kt   α1-vs-power linear fit → AeT
+│   ├── AerobicThresholdStore.kt        SharedPreferences rolling history
+│   └── AerobicThresholdDataType.kt     Live AeT field
 ├── readiness/
 │   ├── ReadinessStore.kt           SharedPreferences-backed baseline
 │   └── ReadinessActivity.kt        2-min resting RMSSD UI

@@ -122,4 +122,12 @@
         sampleRate="1000"
         unitName="min" />
 
+    <DataType
+        typeId="aet_estimate"
+        displayName="@string/aet_estimate_name"
+        description="@string/aet_estimate_description"
+        graphical="false"
+        sampleRate="1000"
+        unitName="W" />
+
 </ExtensionInfo>

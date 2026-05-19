@@ -43,4 +43,11 @@
         android:textStyle="bold"
         android:paddingTop="16dp" />
 
+    <TextView
+        android:id="@+id/readiness_aet"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="14sp"
+        android:paddingTop="24dp" />
+
 </LinearLayout>

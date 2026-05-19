@@ -1,5 +1,8 @@
 package com.inqulab.heartkaroo
 
+import com.inqulab.heartkaroo.aet.AerobicThresholdCalibrator
+import com.inqulab.heartkaroo.aet.AerobicThresholdDataType
+import com.inqulab.heartkaroo.aet.AerobicThresholdStore
 import com.inqulab.heartkaroo.decoupling.CardiacPopDataType
 import com.inqulab.heartkaroo.decoupling.DecouplingDataType
 import com.inqulab.heartkaroo.decoupling.PaHrDecouplingDataType
@@ -23,6 +26,7 @@ import io.hammerhead.karooext.models.FieldValue
 import io.hammerhead.karooext.models.FitEffect
 import io.hammerhead.karooext.models.OnConnectionStatus
 import io.hammerhead.karooext.models.OnDataPoint
+import io.hammerhead.karooext.models.StreamState
 import io.hammerhead.karooext.models.WriteToRecordMesg
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -70,6 +74,15 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             fieldName = "sdnn",
             units = "ms",
         )
+
+        val AET_FIELD = DeveloperField(
+            fieldDefinitionNumber = 5,
+            fitBaseTypeId = 136,
+            fieldName = "aet_estimate",
+            units = "watts",
+        )
+
+        private const val MIN_AET_SAMPLES_TO_PERSIST = 60
     }
 
     lateinit var karooSystem: KarooSystemService
@@ -85,6 +98,7 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             EfficiencyFactorDataType(this),
             WPrimeBalanceDataType(this),
             CardiacPopDataType(this),
+            AerobicThresholdDataType(this),
             HRVDataType(bleManager, EXTENSION_ID),
             HRVStressDataType(bleManager, EXTENSION_ID),
             DfaAlpha1DataType(bleManager, EXTENSION_ID),
@@ -180,12 +194,36 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
                     emitter.onNext(WriteToRecordMesg(FieldValue(SDNN_FIELD, sdnn.toDouble())))
                 }
         }
+        val aetCalibrator = AerobicThresholdCalibrator()
+        val aetPowerJob: Job = scope.launch {
+            karooSystem.streamDataFlow(DataType.Type.POWER).collect { ps ->
+                val p = (ps as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull()
+                    ?: return@collect
+                aetCalibrator.addPower(System.currentTimeMillis(), p)
+            }
+        }
+        val aetAlphaJob: Job = scope.launch {
+            bleManager.dfaAlpha1Flow.filterNotNull().collect { a ->
+                aetCalibrator.addAlpha(a)
+                aetCalibrator.currentEstimate()?.let { est ->
+                    emitter.onNext(WriteToRecordMesg(FieldValue(AET_FIELD, est.toDouble())))
+                }
+            }
+        }
         emitter.setCancellable {
             rmssdJob.cancel()
             stressJob.cancel()
             dfaJob.cancel()
             respJob.cancel()
             sdnnJob.cancel()
+            aetPowerJob.cancel()
+            aetAlphaJob.cancel()
+            val final = aetCalibrator.currentEstimate()
+            val samples = aetCalibrator.sampleCount
+            if (final != null && samples >= MIN_AET_SAMPLES_TO_PERSIST) {
+                AerobicThresholdStore(applicationContext)
+                    .record(System.currentTimeMillis(), final, samples)
+            }
         }
     }
 

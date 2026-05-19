@@ -48,6 +48,12 @@
     <string name="cardiac_pop_name">Cardiac pop @ min</string>
     <string name="cardiac_pop_description">Latches the minute mark at which Pw:Hr decoupling first sustained above 5% — the moment your aerobic ceiling broke. Reads — until the pop happens, then a constant value for the rest of the ride.</string>
 
+    <string name="aet_estimate_name">AeT estimate</string>
+    <string name="aet_estimate_description">Live aerobic-threshold power estimate (watts) — the power at which DFA α1 crosses 0.75 (Rogell et al., 2021). Updates as more α1 / power pairs accumulate; reads — until the regression has enough varied data. Persists across rides — the average is shown on the Readiness screen.</string>
+
+    <string name="readiness_aet_fmt">Rolling AeT estimate: %1$d W  (%2$d rides)</string>
+    <string name="readiness_aet_none">No AeT estimate yet — ride with DFA α1 enabled and the strap paired.</string>
+
     <string name="readiness_button">Take HRV readiness reading</string>
     <string name="readiness_title">HRV Readiness</string>
     <string name="readiness_body">Take a 2-minute resting reading with your H10 before clipping in. Compared against your rolling 7-day average to suggest whether to go hard or take it easy.\n\nSit still, breathe normally, and don\'t talk.</string>

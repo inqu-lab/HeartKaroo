@@ -12,6 +12,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.inqulab.heartkaroo.R
+import com.inqulab.heartkaroo.aet.AerobicThresholdStore
 import com.inqulab.heartkaroo.hrv.PolarBleManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -34,8 +35,10 @@ class ReadinessActivity : AppCompatActivity() {
 
     private lateinit var bleManager: PolarBleManager
     private lateinit var store: ReadinessStore
+    private lateinit var aetStore: AerobicThresholdStore
     private lateinit var statusView: TextView
     private lateinit var verdictView: TextView
+    private lateinit var aetView: TextView
     private lateinit var startButton: Button
     private var measurementJob: Job? = null
     private var connectionJob: Job? = null
@@ -53,11 +56,21 @@ class ReadinessActivity : AppCompatActivity() {
         setContentView(R.layout.activity_readiness)
         bleManager = PolarBleManager(applicationContext)
         store = ReadinessStore(applicationContext)
+        aetStore = AerobicThresholdStore(applicationContext)
         statusView = findViewById(R.id.readiness_status)
         verdictView = findViewById(R.id.readiness_verdict)
+        aetView = findViewById(R.id.readiness_aet)
         startButton = findViewById(R.id.readiness_start)
         startButton.setOnClickListener { ensurePermissionsAndStart() }
         renderBaselineSummary()
+        renderAetSummary()
+    }
+
+    private fun renderAetSummary() {
+        val rolling = aetStore.rollingEstimate()
+        val rides = aetStore.entries().size
+        aetView.text = if (rolling == null) getString(R.string.readiness_aet_none)
+        else getString(R.string.readiness_aet_fmt, rolling.toInt(), rides)
     }
 
     override fun onDestroy() {
