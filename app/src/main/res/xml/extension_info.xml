@@ -114,4 +114,12 @@
         sampleRate="1000"
         unitName="J" />
 
+    <DataType
+        typeId="cardiac_pop_minute"
+        displayName="@string/cardiac_pop_name"
+        description="@string/cardiac_pop_description"
+        graphical="false"
+        sampleRate="1000"
+        unitName="min" />
+
 </ExtensionInfo>

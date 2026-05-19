@@ -1,5 +1,6 @@
 package com.inqulab.heartkaroo
 
+import com.inqulab.heartkaroo.decoupling.CardiacPopDataType
 import com.inqulab.heartkaroo.decoupling.DecouplingDataType
 import com.inqulab.heartkaroo.decoupling.PaHrDecouplingDataType
 import com.inqulab.heartkaroo.efficiency.EfficiencyFactorDataType
@@ -83,6 +84,7 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             PaHrDecouplingDataType(this),
             EfficiencyFactorDataType(this),
             WPrimeBalanceDataType(this),
+            CardiacPopDataType(this),
             HRVDataType(bleManager, EXTENSION_ID),
             HRVStressDataType(bleManager, EXTENSION_ID),
             DfaAlpha1DataType(bleManager, EXTENSION_ID),

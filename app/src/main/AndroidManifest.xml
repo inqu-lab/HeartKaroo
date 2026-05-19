@@ -31,6 +31,10 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".readiness.ReadinessActivity"
+            android:exported="false" />
+
         <service
             android:name=".HeartKarooExtension"
             android:exported="true"
