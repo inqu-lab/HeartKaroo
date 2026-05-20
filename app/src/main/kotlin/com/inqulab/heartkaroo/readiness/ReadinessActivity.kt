@@ -180,6 +180,9 @@ class ReadinessActivity : AppCompatActivity() {
         measurementJob?.cancel(); measurementJob = null
         connectionJob?.cancel(); connectionJob = null
         stopScan?.invoke(); stopScan = null
+        // The link is owned by the manager now, so cancelling the collector above
+        // no longer drops it — release it explicitly when the screen is done.
+        bleManager.disconnect()
     }
 
     private companion object {

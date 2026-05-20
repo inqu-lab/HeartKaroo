@@ -204,22 +204,35 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
 
     override fun connectDevice(uid: String, emitter: Emitter<DeviceEvent>) {
         emitter.onNext(OnConnectionStatus(ConnectionStatus.SEARCHING))
+        // Open (or reuse) the link; it's owned by the manager, so cancelling this
+        // emitter below won't drop the strap. Karoo recreates this emitter across
+        // lifecycle changes (e.g. at ride start) — tearing the link down on each
+        // cancel was disconnecting the strap mid-ride.
+        bleManager.ensureConnected(uid)
         val job: Job = CoroutineScope(Dispatchers.IO).launch {
-            bleManager.connect(uid).collect { event ->
-                when (event) {
-                    is PolarBleManager.BleEvent.Connected ->
-                        emitter.onNext(OnConnectionStatus(ConnectionStatus.CONNECTED))
-                    is PolarBleManager.BleEvent.Disconnected ->
-                        emitter.onNext(OnConnectionStatus(ConnectionStatus.SEARCHING))
-                    is PolarBleManager.BleEvent.Heartrate ->
-                        emitter.onNext(
-                            OnDataPoint(
-                                DataPoint(
-                                    dataTypeId = DataType.Type.HEART_RATE,
-                                    values = mapOf(DataType.Field.SINGLE to event.bpm.toDouble()),
-                                )
+            // connectedFlow is a StateFlow, so it always replays the current link
+            // state to a freshly-recreated emitter (the event stream below carries
+            // only future transitions).
+            launch {
+                bleManager.connectedFlow.collect { connected ->
+                    emitter.onNext(
+                        OnConnectionStatus(
+                            if (connected) ConnectionStatus.CONNECTED
+                            else ConnectionStatus.SEARCHING,
+                        )
+                    )
+                }
+            }
+            bleManager.events().collect { event ->
+                if (event is PolarBleManager.BleEvent.Heartrate) {
+                    emitter.onNext(
+                        OnDataPoint(
+                            DataPoint(
+                                dataTypeId = DataType.Type.HEART_RATE,
+                                values = mapOf(DataType.Field.SINGLE to event.bpm.toDouble()),
                             )
                         )
+                    )
                 }
             }
         }
@@ -321,6 +334,7 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
 
     override fun onDestroy() {
         serviceScope.cancel()
+        bleManager.disconnect()
         karooSystem.disconnect()
         super.onDestroy()
     }

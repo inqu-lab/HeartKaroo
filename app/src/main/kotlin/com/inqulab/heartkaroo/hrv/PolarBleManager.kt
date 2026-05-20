@@ -9,12 +9,13 @@ import com.polar.sdk.api.model.PolarDeviceInfo
 import com.polar.sdk.api.model.PolarHrData
 import io.reactivex.rxjava3.disposables.Disposable
 import io.reactivex.rxjava3.schedulers.Schedulers
-import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.callbackFlow
 import java.util.Collections
 
 /**
@@ -27,8 +28,10 @@ import java.util.Collections
  *    standard 2A37 characteristic, which truncates to 1/1024 s and drops
  *    intermediate beats between notifications)
  *
- * The public surface (BleEvent, connect(), startDeviceScan(), the HRV
- * StateFlows) is unchanged so the rest of the extension is unaffected.
+ * The BLE link is owned by the manager and lives independently of any flow
+ * collector: it is opened with [ensureConnected]/[connect] and only dropped by
+ * [disconnect] (on real teardown), so a strap stays connected even as Karoo
+ * recreates the connectDevice emitter — e.g. when a ride starts.
  */
 class PolarBleManager(private val context: Context) {
 
@@ -77,6 +80,22 @@ class PolarBleManager(private val context: Context) {
     // running on the same API instance during connectToDevice().
     @Volatile
     private var scanDisposable: Disposable? = null
+
+    // The live BLE link is owned by this manager, not by any single flow
+    // collector. These track that link so it survives Karoo tearing down and
+    // recreating the connectDevice emitter (which happens at ride start).
+    @Volatile
+    private var hrDisposable: Disposable? = null
+    @Volatile
+    private var connectingMac: String? = null
+    private var disconnectedAt = 0L
+
+    // Hot, shared event stream. Collectors come and go (each connectDevice or
+    // Readiness subscription); the connection underneath them does not.
+    private val events = MutableSharedFlow<BleEvent>(
+        extraBufferCapacity = 64,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
 
     private val _rmssdFlow = MutableStateFlow(0f)
     val rmssdFlow: StateFlow<Float> = _rmssdFlow.asStateFlow()
@@ -186,21 +205,60 @@ class PolarBleManager(private val context: Context) {
         }
     }
 
-    fun connect(macAddress: String): Flow<BleEvent> = callbackFlow {
-        val scope = this
-        var hrDisposable: Disposable? = null
+    /**
+     * Ensures a BLE link to [macAddress] and returns the shared [BleEvent]
+     * stream. The link is owned by the manager, NOT by the returned flow:
+     * cancelling a collector stops delivery to that collector but leaves the
+     * strap connected. Karoo tears down and recreates the connectDevice emitter
+     * across lifecycle changes (notably when a ride starts); disconnecting on
+     * every teardown was dropping the strap mid-ride, and because
+     * disconnectFromDevice is an explicit disconnect the SDK would not
+     * auto-reconnect afterwards. Call [disconnect] to actually drop the link.
+     */
+    fun connect(macAddress: String): Flow<BleEvent> {
+        ensureConnected(macAddress)
+        return events.asSharedFlow()
+    }
 
+    /** The shared connection/HR event stream, decoupled from the link lifecycle. */
+    fun events(): Flow<BleEvent> = events.asSharedFlow()
+
+    /** Idempotently open the link to [macAddress]. (Re)claims the shared SDK
+     *  callback for this manager and only issues a connect when the strap
+     *  changes, so a repeat call for the same strap is a no-op that won't bounce
+     *  the link. */
+    @Synchronized
+    fun ensureConnected(macAddress: String) {
         // Never scan and connect at the same time (Polar SDK pitfall).
         scanDisposable?.dispose()
         scanDisposable = null
+        // The Polar SDK keeps a single callback per API instance, and this
+        // process shares one API across the service and the Readiness screen, so
+        // (re)claim it for whichever manager is currently driving the link.
+        api.setApiCallback(apiCallback)
+        if (connectingMac == macAddress) return
+        connectingMac?.let { old -> runCatching { api.disconnectFromDevice(old) } }
+        connectingMac = macAddress
+        runCatching { api.connectToDevice(macAddress) }
+    }
 
-        // The SDK identifies the device in callbacks by its Polar device id
-        // (e.g. "B36B5B2C"), NOT the BT MAC address we connect with, so we
-        // must not match against `address` here. This manager only ever
-        // connects to one device per connect(), so no disambiguation is needed.
-        var disconnectedAt = 0L
+    /** Drop the BLE link and reset HRV state. Call on real teardown (service
+     *  onDestroy, Readiness screen close) — never on a transient emitter cancel. */
+    @Synchronized
+    fun disconnect() {
+        hrDisposable?.dispose()
+        hrDisposable = null
+        connectingMac?.let { mac -> runCatching { api.disconnectFromDevice(mac) } }
+        connectingMac = null
+        _connectedFlow.value = false
+        resetHrvCalculators()
+    }
 
-        val callback = object : PolarBleApiCallback() {
+    // The SDK identifies the device in callbacks by its Polar device id
+    // (e.g. "B36B5B2C"), NOT the BT MAC we connect with, so we don't match on the
+    // MAC here. Only one strap is connected at a time.
+    private val apiCallback: PolarBleApiCallback by lazy {
+        object : PolarBleApiCallback() {
             override fun deviceConnected(polarDeviceInfo: PolarDeviceInfo) {
                 // Drop the retained HRV windows only if the gap was long enough
                 // that they'd be stale; a brief auto-reconnect keeps them so the
@@ -212,7 +270,7 @@ class PolarBleManager(private val context: Context) {
                 }
                 disconnectedAt = 0L
                 _connectedFlow.value = true
-                scope.trySend(BleEvent.Connected)
+                events.tryEmit(BleEvent.Connected)
             }
 
             override fun deviceDisconnected(polarDeviceInfo: PolarDeviceInfo) {
@@ -223,7 +281,7 @@ class PolarBleManager(private val context: Context) {
                 // Blank the fields but keep the windows; a fast reconnect resumes
                 // at once. resetHrvCalculators() runs on a long gap / teardown.
                 clearHrvOutputs()
-                scope.trySend(BleEvent.Disconnected)
+                events.tryEmit(BleEvent.Disconnected)
                 // setAutomaticReconnection(true) makes the SDK keep retrying;
                 // we just clear local state and wait for the next deviceConnected.
             }
@@ -246,29 +304,16 @@ class PolarBleManager(private val context: Context) {
                 hrDisposable = api.startHrStreaming(identifier)
                     .observeOn(Schedulers.computation())
                     .subscribe(
-                        { hrData -> consumeHrData(hrData, scope) },
+                        { hrData -> consumeHrData(hrData) },
                         { /* stream error — SDK will fire deviceDisconnected if relevant */ },
                     )
             }
         }
-
-        api.setApiCallback(callback)
-        runCatching { api.connectToDevice(macAddress) }
-
-        awaitClose {
-            hrDisposable?.dispose()
-            runCatching { api.disconnectFromDevice(macAddress) }
-            _connectedFlow.value = false
-            resetHrvCalculators()
-        }
     }
 
-    private fun consumeHrData(
-        hrData: PolarHrData,
-        scope: kotlinx.coroutines.channels.SendChannel<BleEvent>,
-    ) {
+    private fun consumeHrData(hrData: PolarHrData) {
         for (sample in hrData.samples) {
-            if (sample.hr > 0) scope.trySend(BleEvent.Heartrate(sample.hr))
+            if (sample.hr > 0) events.tryEmit(BleEvent.Heartrate(sample.hr))
 
             val contactOk = !sample.contactStatusSupported || sample.contactStatus
             _contactOkFlow.value = contactOk
