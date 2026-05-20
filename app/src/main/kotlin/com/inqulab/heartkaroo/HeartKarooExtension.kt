@@ -156,9 +156,10 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
                     uid = device.address,
                     dataTypes = listOf(DataType.Type.HEART_RATE),
                     // Suffix so this entry is distinguishable from Karoo's own
-                    // native HR pairing of the same strap. The user must pair
-                    // THIS one for HRV — the strap allows only one connection.
-                    displayName = "${device.name} (HRV)",
+                    // native HR pairing of the same strap. Pair THIS one only —
+                    // it provides both HR and HRV from the single H10 connection
+                    // (the strap allows only one BLE link at a time).
+                    displayName = "${device.name} (HR+HRV)",
                 )
             )
         }

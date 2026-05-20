@@ -136,15 +136,17 @@ class PolarBleManager(private val context: Context) {
         val scope = this
         var hrDisposable: Disposable? = null
 
+        // The SDK identifies the device in callbacks by its Polar device id
+        // (e.g. "B36B5B2C"), NOT the BT MAC address we connect with, so we
+        // must not match against `address` here. This manager only ever
+        // connects to one device per connect(), so no disambiguation is needed.
         val callback = object : PolarBleApiCallback() {
             override fun deviceConnected(polarDeviceInfo: PolarDeviceInfo) {
-                if (!polarDeviceInfo.address.equals(address, ignoreCase = true)) return
                 _connectedFlow.value = true
                 scope.trySend(BleEvent.Connected)
             }
 
             override fun deviceDisconnected(polarDeviceInfo: PolarDeviceInfo) {
-                if (!polarDeviceInfo.address.equals(address, ignoreCase = true)) return
                 _connectedFlow.value = false
                 hrDisposable?.dispose()
                 hrDisposable = null
@@ -164,7 +166,6 @@ class PolarBleManager(private val context: Context) {
                 feature: PolarBleApi.PolarBleSdkFeature,
             ) {
                 if (feature != PolarBleApi.PolarBleSdkFeature.FEATURE_HR) return
-                if (!identifier.equals(address, ignoreCase = true)) return
                 hrDisposable?.dispose()
                 hrDisposable = api.startHrStreaming(identifier)
                     .observeOn(Schedulers.computation())
