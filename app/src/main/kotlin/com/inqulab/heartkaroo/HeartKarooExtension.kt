@@ -37,12 +37,14 @@ import io.hammerhead.karooext.models.Device
 import io.hammerhead.karooext.models.DeviceEvent
 import io.hammerhead.karooext.models.FieldValue
 import io.hammerhead.karooext.models.FitEffect
+import io.hammerhead.karooext.models.InRideAlert
 import io.hammerhead.karooext.models.OnConnectionStatus
 import io.hammerhead.karooext.models.OnDataPoint
 import io.hammerhead.karooext.models.StreamState
 import io.hammerhead.karooext.models.WriteToRecordMesg
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filter
@@ -98,6 +100,11 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
 
         private const val MIN_AET_SAMPLES_TO_PERSIST = 60
         private const val MIN_CADENCE_SAMPLES_TO_PERSIST = 300
+
+        // Warn at/below this strap battery %, re-arming once it recovers above
+        // the second threshold (so we don't alert repeatedly around the line).
+        private const val LOW_BATTERY_PCT = 15
+        private const val BATTERY_RECOVERED_PCT = 25
     }
 
     lateinit var karooSystem: KarooSystemService
@@ -141,11 +148,40 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
         )
     }
 
+    private val serviceScope = CoroutineScope(Dispatchers.IO)
+
     override fun onCreate() {
         super.onCreate()
         karooSystem = KarooSystemService(applicationContext)
         bleManager = PolarBleManager(applicationContext)
         karooSystem.connect {}
+        watchStrapBattery()
+    }
+
+    /** Raises a single in-ride alert when the strap battery first drops to the
+     *  warning level, re-arming only once it has recovered (fresh battery). */
+    private fun watchStrapBattery() {
+        serviceScope.launch {
+            var warned = false
+            bleManager.batteryFlow.filterNotNull().collect { level ->
+                if (level <= LOW_BATTERY_PCT && !warned) {
+                    warned = true
+                    karooSystem.dispatch(
+                        InRideAlert(
+                            id = "heartkaroo-strap-battery",
+                            icon = R.drawable.ic_hrv,
+                            title = "Strap battery low",
+                            detail = "Polar strap at $level%",
+                            autoDismissMs = 15_000L,
+                            backgroundColor = android.R.color.holo_red_dark,
+                            textColor = android.R.color.white,
+                        )
+                    )
+                } else if (level > BATTERY_RECOVERED_PCT) {
+                    warned = false
+                }
+            }
+        }
     }
 
     override fun startScan(emitter: Emitter<Device>) {
@@ -284,6 +320,7 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
     }
 
     override fun onDestroy() {
+        serviceScope.cancel()
         karooSystem.disconnect()
         super.onDestroy()
     }

@@ -49,6 +49,10 @@ class PolarBleManager(private val context: Context) {
         // once instead of refilling from scratch.
         private const val STALE_GAP_MS = 15_000L
 
+        // DFA α1 is withheld when more than this fraction of recent beats are
+        // artifacts — past a few percent the exponent is no longer trustworthy.
+        private const val MAX_ALPHA1_ARTIFACT_RATE = 0.05
+
         // A single Polar BLE stack for the whole process. The extension service
         // and the Readiness screen each hold a PolarBleManager; without this they
         // would spin up two BLE stacks that fight over the radio and cause drops.
@@ -85,10 +89,12 @@ class PolarBleManager(private val context: Context) {
     private val _dfaAlpha1Flow = MutableStateFlow<Float?>(null)
     val dfaAlpha1Flow: StateFlow<Float?> = _dfaAlpha1Flow.asStateFlow()
     private val dfaCalculator = DfaAlpha1Calculator()
-    // DFA α1 is very artifact-sensitive, so its window is fed only the RR
-    // intervals that survive artifact rejection (the other metrics are far more
-    // tolerant and keep using the raw stream).
-    private val dfaArtifactCorrector = RrArtifactCorrector()
+    // The variability metrics (RMSSD/stress, SDNN, pNN50, Poincaré, DFA α1) are
+    // all artifact-sensitive, so they are fed only the RR intervals that survive
+    // artifact rejection. The ectopic detector and respiratory rate keep using
+    // the raw stream (the former literally counts artifacts; the latter is
+    // timing-sensitive and shouldn't have beats removed).
+    private val artifactCorrector = RrArtifactCorrector()
 
     private val _sdnnFlow = MutableStateFlow<Float?>(null)
     val sdnnFlow: StateFlow<Float?> = _sdnnFlow.asStateFlow()
@@ -117,6 +123,15 @@ class PolarBleManager(private val context: Context) {
     private val _connectedFlow = MutableStateFlow(false)
     val connectedFlow: StateFlow<Boolean> = _connectedFlow.asStateFlow()
 
+    /** Strap battery level in percent, or null until reported. */
+    private val _batteryFlow = MutableStateFlow<Int?>(null)
+    val batteryFlow: StateFlow<Int?> = _batteryFlow.asStateFlow()
+
+    /** Whether the strap currently has good skin contact (true when the strap
+     *  doesn't report contact at all). HRV is not computed while contact is lost. */
+    private val _contactOkFlow = MutableStateFlow(true)
+    val contactOkFlow: StateFlow<Boolean> = _contactOkFlow.asStateFlow()
+
     /** Blanks the published values (fields show "Searching") without dropping
      *  the accumulated RR windows, so a quick reconnect resumes immediately. */
     private fun clearHrvOutputs() {
@@ -136,7 +151,7 @@ class PolarBleManager(private val context: Context) {
         calculator.reset()
         stressCalculator.reset()
         dfaCalculator.reset()
-        dfaArtifactCorrector.reset()
+        artifactCorrector.reset()
         sdnnCalculator.reset()
         pnn50Calculator.reset()
         poincareCalculator.reset()
@@ -218,6 +233,10 @@ class PolarBleManager(private val context: Context) {
                 // (it's abstract on the callback provider interface).
             }
 
+            override fun batteryLevelReceived(identifier: String, level: Int) {
+                _batteryFlow.value = level
+            }
+
             override fun bleSdkFeatureReady(
                 identifier: String,
                 feature: PolarBleApi.PolarBleSdkFeature,
@@ -250,18 +269,30 @@ class PolarBleManager(private val context: Context) {
     ) {
         for (sample in hrData.samples) {
             if (sample.hr > 0) scope.trySend(BleEvent.Heartrate(sample.hr))
+
+            val contactOk = !sample.contactStatusSupported || sample.contactStatus
+            _contactOkFlow.value = contactOk
+
             if (!sample.rrAvailable) continue
+            // Poor skin contact produces noise, not heartbeats — don't let it
+            // pollute the HRV windows.
+            if (!contactOk) continue
+
             var anyRr = false
             for (rr in sample.rrsMs) {
                 if (rr <= 0) continue
                 anyRr = true
-                calculator.addInterval(rr)
-                dfaArtifactCorrector.accept(rr)?.let { dfaCalculator.addInterval(it) }
-                sdnnCalculator.addInterval(rr)
-                pnn50Calculator.addInterval(rr)
-                poincareCalculator.addInterval(rr)
-                respiratoryRateCalculator.addInterval(rr)
+                // Raw stream: ectopic count and respiratory rate.
                 ectopicDetector.addInterval(rr)
+                respiratoryRateCalculator.addInterval(rr)
+                // Artifact-corrected stream: the variability metrics.
+                artifactCorrector.accept(rr)?.let { clean ->
+                    calculator.addInterval(clean)
+                    dfaCalculator.addInterval(clean)
+                    sdnnCalculator.addInterval(clean)
+                    pnn50Calculator.addInterval(clean)
+                    poincareCalculator.addInterval(clean)
+                }
             }
             if (!anyRr) continue
             if (calculator.hasData) {
@@ -270,7 +301,10 @@ class PolarBleManager(private val context: Context) {
                 stressCalculator.addRmssd(rmssd)
                 _stressFlow.value = stressCalculator.getStressPct()
             }
-            _dfaAlpha1Flow.value = dfaCalculator.getAlpha1()
+            // Withhold α1 when the recent artifact rate is too high to trust it.
+            _dfaAlpha1Flow.value =
+                if (artifactCorrector.recentArtifactRate() > MAX_ALPHA1_ARTIFACT_RATE) null
+                else dfaCalculator.getAlpha1()
             _sdnnFlow.value = sdnnCalculator.getSdnn()
             _pnn50Flow.value = pnn50Calculator.getPnn50()
             val pc = poincareCalculator.getResult()
