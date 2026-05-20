@@ -23,4 +23,6 @@ class HRVCalculator(private val windowSize: Int = 30) {
     }
 
     val hasData: Boolean get() = rrIntervals.size >= 2
+
+    fun reset() { rrIntervals.clear() }
 }

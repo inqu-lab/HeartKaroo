@@ -49,6 +49,11 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
 
+    // Polar BLE SDK + RxJava (used for the H10 connection + HR/RR streaming).
+    implementation("com.github.polarofficial:polar-ble-sdk:5.6.0")
+    implementation("io.reactivex.rxjava3:rxjava:3.1.8")
+    implementation("io.reactivex.rxjava3:rxandroid:3.0.2")
+
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
 }

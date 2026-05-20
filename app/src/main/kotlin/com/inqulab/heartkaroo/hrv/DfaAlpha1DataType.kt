@@ -7,7 +7,6 @@ import io.hammerhead.karooext.models.DataType
 import io.hammerhead.karooext.models.StreamState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 
 /**
@@ -26,10 +25,12 @@ class DfaAlpha1DataType(
     }
 
     override fun startStream(emitter: Emitter<StreamState>) {
+        emitter.onNext(StreamState.NotAvailable)
         val job = CoroutineScope(Dispatchers.IO).launch {
-            bleManager.dfaAlpha1Flow
-                .filterNotNull()
-                .collect { alpha ->
+            bleManager.dfaAlpha1Flow.collect { alpha ->
+                if (alpha == null) {
+                    emitter.onNext(StreamState.NotAvailable)
+                } else {
                     emitter.onNext(
                         StreamState.Streaming(
                             DataPoint(
@@ -39,6 +40,7 @@ class DfaAlpha1DataType(
                         )
                     )
                 }
+            }
         }
         emitter.setCancellable { job.cancel() }
     }
