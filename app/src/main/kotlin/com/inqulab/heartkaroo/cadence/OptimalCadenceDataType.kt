@@ -47,7 +47,7 @@ class OptimalCadenceDataType(
                 if (p != null && h != null && c != null) calc.add(p, h, c)
                 val rpm = calc.optimalCadence()
                 emitter.onNext(
-                    if (rpm == null) StreamState.NotAvailable
+                    if (rpm == null) StreamState.Searching
                     else StreamState.Streaming(DataPoint(dataTypeId, mapOf(FIELD to rpm.toDouble()))),
                 )
             }

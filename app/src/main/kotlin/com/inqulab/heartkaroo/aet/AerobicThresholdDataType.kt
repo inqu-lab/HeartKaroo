@@ -47,7 +47,7 @@ class AerobicThresholdDataType(
             parent.bleManager.dfaAlpha1Flow.filterNotNull().collect { a ->
                 calc.addAlpha(a)
                 val est = calc.currentEstimate()
-                val state = if (est == null) StreamState.NotAvailable
+                val state = if (est == null) StreamState.Searching
                 else StreamState.Streaming(
                     DataPoint(dataTypeId, mapOf(FIELD to est.toDouble())),
                 )

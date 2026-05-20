@@ -50,7 +50,7 @@ class TssDataType(
                     (hours * iF * iF * 100.0).toFloat()
                 }
                 emitter.onNext(
-                    if (tss == null) StreamState.NotAvailable
+                    if (tss == null) StreamState.Searching
                     else StreamState.Streaming(DataPoint(dataTypeId, mapOf(FIELD to tss.toDouble()))),
                 )
             }

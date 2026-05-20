@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
  * Latching data field that records the minute mark at which Pw:Hr
  * decoupling first crossed (and stayed above) the configured threshold.
  *
- * Reads StreamState.NotAvailable before the pop, then a constant minutes
+ * Emits StreamState.Searching before the pop, then a constant minutes
  * value for the rest of the ride.
  */
 class CardiacPopDataType(
@@ -50,7 +50,7 @@ class CardiacPopDataType(
                 else decouplingCalc.current()
                 popDetector.add(now, pct)
                 val mins = popDetector.getPopMinutes()
-                val state = if (mins == null) StreamState.NotAvailable
+                val state = if (mins == null) StreamState.Searching
                 else StreamState.Streaming(
                     DataPoint(dataTypeId, mapOf(FIELD to mins.toDouble())),
                 )

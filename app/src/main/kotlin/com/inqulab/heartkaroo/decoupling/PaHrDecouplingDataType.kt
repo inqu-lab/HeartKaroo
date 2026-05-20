@@ -44,7 +44,7 @@ class PaHrDecouplingDataType(
             }.collect { (speed, hr) ->
                 val now = System.currentTimeMillis()
                 val pct = if (speed != null && hr != null) calc.add(now, speed, hr) else calc.current()
-                val state = if (pct == null) StreamState.NotAvailable
+                val state = if (pct == null) StreamState.Searching
                 else StreamState.Streaming(
                     DataPoint(dataTypeId, mapOf(FIELD to pct)),
                 )

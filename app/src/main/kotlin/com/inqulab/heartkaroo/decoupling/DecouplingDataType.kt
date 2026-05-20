@@ -47,7 +47,7 @@ class DecouplingDataType(
                 val now = System.currentTimeMillis()
                 val pct = if (p != null && h != null) calc.add(now, p, h) else calc.current()
                 val state = if (pct == null) {
-                    StreamState.NotAvailable
+                    StreamState.Searching
                 } else {
                     StreamState.Streaming(
                         DataPoint(
