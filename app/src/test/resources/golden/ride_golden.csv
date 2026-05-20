@@ -1,0 +1,16 @@
+metric,value
+average_power,185.608124
+normalized_power,217.844635
+mmp_5s,291.140015
+mmp_1min,285.923279
+mmp_5min,223.010605
+mmp_20min,215.144409
+kilojoules,445.313049
+decoupling_pct,13.096104
+efficiency_factor,1.682659
+cardiac_cost,0.685950
+wprime_bal_final,17192.523438
+wprime_bal_min,4528.725586
+coasting_pct,2.501042
+vam_max,900.000000
+quadrant_dominant,4.000000

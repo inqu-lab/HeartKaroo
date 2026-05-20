@@ -44,6 +44,12 @@ android {
     }
 }
 
+// Forward -Dgolden.regenerate to the forked unit-test JVM (used by
+// GoldenReferenceTest to rewrite its fixtures/goldens). No-op when unset.
+tasks.withType<Test>().configureEach {
+    System.getProperty("golden.regenerate")?.let { systemProperty("golden.regenerate", it) }
+}
+
 dependencies {
     implementation("io.hammerhead:karoo-ext:1.1.8")
     implementation("androidx.core:core-ktx:1.18.0")

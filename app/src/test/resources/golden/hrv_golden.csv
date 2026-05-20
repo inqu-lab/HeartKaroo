@@ -1,0 +1,9 @@
+metric,value
+rmssd,33.195976
+sdnn,37.433853
+pnn50,11.273486
+poincare_sd1,23.497089
+poincare_sd2,47.439156
+poincare_ratio,0.495310
+dfa_alpha1,0.236342
+resp_bpm,10.410539
