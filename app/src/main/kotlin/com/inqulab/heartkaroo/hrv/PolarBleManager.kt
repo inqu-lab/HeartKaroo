@@ -41,17 +41,31 @@ class PolarBleManager(private val context: Context) {
     /** A strap found during [startDeviceScan]. [id] is the BT MAC address. */
     data class DiscoveredDevice(val id: String, val name: String)
 
-    private val api: PolarBleApi by lazy {
-        PolarBleApiDefaultImpl.defaultImplementation(
-            context.applicationContext,
-            setOf(
-                PolarBleApi.PolarBleSdkFeature.FEATURE_HR,
-                PolarBleApi.PolarBleSdkFeature.FEATURE_BATTERY_INFO,
-                PolarBleApi.PolarBleSdkFeature.FEATURE_DEVICE_INFO,
-            ),
-        ).apply {
-            setAutomaticReconnection(true)
-        }
+    private val api: PolarBleApi by lazy { sharedApi(context) }
+
+    companion object {
+        // After a gap longer than this, the retained HRV windows are stale and
+        // get cleared on reconnect; shorter gaps keep them so values resume at
+        // once instead of refilling from scratch.
+        private const val STALE_GAP_MS = 15_000L
+
+        // A single Polar BLE stack for the whole process. The extension service
+        // and the Readiness screen each hold a PolarBleManager; without this they
+        // would spin up two BLE stacks that fight over the radio and cause drops.
+        @Volatile
+        private var sharedApiInstance: PolarBleApi? = null
+
+        private fun sharedApi(context: Context): PolarBleApi =
+            sharedApiInstance ?: synchronized(this) {
+                sharedApiInstance ?: PolarBleApiDefaultImpl.defaultImplementation(
+                    context.applicationContext,
+                    setOf(
+                        PolarBleApi.PolarBleSdkFeature.FEATURE_HR,
+                        PolarBleApi.PolarBleSdkFeature.FEATURE_BATTERY_INFO,
+                        PolarBleApi.PolarBleSdkFeature.FEATURE_DEVICE_INFO,
+                    ),
+                ).apply { setAutomaticReconnection(true) }.also { sharedApiInstance = it }
+            }
     }
 
     // Tracks the active scan so we can stop it before connecting: the Polar SDK
@@ -99,15 +113,9 @@ class PolarBleManager(private val context: Context) {
     private val _connectedFlow = MutableStateFlow(false)
     val connectedFlow: StateFlow<Boolean> = _connectedFlow.asStateFlow()
 
-    private fun resetHrvCalculators() {
-        calculator.reset()
-        stressCalculator.reset()
-        dfaCalculator.reset()
-        sdnnCalculator.reset()
-        pnn50Calculator.reset()
-        poincareCalculator.reset()
-        respiratoryRateCalculator.reset()
-        ectopicDetector.reset()
+    /** Blanks the published values (fields show "Searching") without dropping
+     *  the accumulated RR windows, so a quick reconnect resumes immediately. */
+    private fun clearHrvOutputs() {
         _rmssdFlow.value = 0f
         _stressFlow.value = null
         _dfaAlpha1Flow.value = null
@@ -118,6 +126,18 @@ class PolarBleManager(private val context: Context) {
         _sd1Sd2RatioFlow.value = null
         _respiratoryRateFlow.value = null
         _ectopicRateFlow.value = null
+    }
+
+    private fun resetHrvCalculators() {
+        calculator.reset()
+        stressCalculator.reset()
+        dfaCalculator.reset()
+        sdnnCalculator.reset()
+        pnn50Calculator.reset()
+        poincareCalculator.reset()
+        respiratoryRateCalculator.reset()
+        ectopicDetector.reset()
+        clearHrvOutputs()
     }
 
     fun startDeviceScan(onDevice: (DiscoveredDevice) -> Unit): () -> Unit {
@@ -158,17 +178,31 @@ class PolarBleManager(private val context: Context) {
         // (e.g. "B36B5B2C"), NOT the BT MAC address we connect with, so we
         // must not match against `address` here. This manager only ever
         // connects to one device per connect(), so no disambiguation is needed.
+        var disconnectedAt = 0L
+
         val callback = object : PolarBleApiCallback() {
             override fun deviceConnected(polarDeviceInfo: PolarDeviceInfo) {
+                // Drop the retained HRV windows only if the gap was long enough
+                // that they'd be stale; a brief auto-reconnect keeps them so the
+                // fields resume immediately instead of refilling for ~30 beats.
+                if (disconnectedAt != 0L &&
+                    System.currentTimeMillis() - disconnectedAt > STALE_GAP_MS
+                ) {
+                    resetHrvCalculators()
+                }
+                disconnectedAt = 0L
                 _connectedFlow.value = true
                 scope.trySend(BleEvent.Connected)
             }
 
             override fun deviceDisconnected(polarDeviceInfo: PolarDeviceInfo) {
+                disconnectedAt = System.currentTimeMillis()
                 _connectedFlow.value = false
                 hrDisposable?.dispose()
                 hrDisposable = null
-                resetHrvCalculators()
+                // Blank the fields but keep the windows; a fast reconnect resumes
+                // at once. resetHrvCalculators() runs on a long gap / teardown.
+                clearHrvOutputs()
                 scope.trySend(BleEvent.Disconnected)
                 // setAutomaticReconnection(true) makes the SDK keep retrying;
                 // we just clear local state and wait for the next deviceConnected.
