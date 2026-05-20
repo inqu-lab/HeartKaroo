@@ -131,13 +131,13 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             HRVDataType(bleManager, EXTENSION_ID),
             HRVStressDataType(bleManager, EXTENSION_ID),
             DfaAlpha1DataType(bleManager, EXTENSION_ID),
-            HrvFlowDataType(EXTENSION_ID, "hrv_sdnn", bleManager.sdnnFlow),
-            HrvFlowDataType(EXTENSION_ID, "hrv_pnn50", bleManager.pnn50Flow),
-            HrvFlowDataType(EXTENSION_ID, "hrv_sd1", bleManager.sd1Flow),
-            HrvFlowDataType(EXTENSION_ID, "hrv_sd2", bleManager.sd2Flow),
-            HrvFlowDataType(EXTENSION_ID, "hrv_sd1_sd2_ratio", bleManager.sd1Sd2RatioFlow),
-            HrvFlowDataType(EXTENSION_ID, "respiratory_rate", bleManager.respiratoryRateFlow),
-            HrvFlowDataType(EXTENSION_ID, "ectopic_rate", bleManager.ectopicRateFlow),
+            HrvFlowDataType(EXTENSION_ID, "hrv_sdnn", bleManager.sdnnFlow, bleManager.connectedFlow),
+            HrvFlowDataType(EXTENSION_ID, "hrv_pnn50", bleManager.pnn50Flow, bleManager.connectedFlow),
+            HrvFlowDataType(EXTENSION_ID, "hrv_sd1", bleManager.sd1Flow, bleManager.connectedFlow),
+            HrvFlowDataType(EXTENSION_ID, "hrv_sd2", bleManager.sd2Flow, bleManager.connectedFlow),
+            HrvFlowDataType(EXTENSION_ID, "hrv_sd1_sd2_ratio", bleManager.sd1Sd2RatioFlow, bleManager.connectedFlow),
+            HrvFlowDataType(EXTENSION_ID, "respiratory_rate", bleManager.respiratoryRateFlow, bleManager.connectedFlow),
+            HrvFlowDataType(EXTENSION_ID, "ectopic_rate", bleManager.ectopicRateFlow, bleManager.connectedFlow),
         )
     }
 

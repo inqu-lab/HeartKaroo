@@ -85,6 +85,10 @@ class PolarBleManager(private val context: Context) {
     private val _dfaAlpha1Flow = MutableStateFlow<Float?>(null)
     val dfaAlpha1Flow: StateFlow<Float?> = _dfaAlpha1Flow.asStateFlow()
     private val dfaCalculator = DfaAlpha1Calculator()
+    // DFA α1 is very artifact-sensitive, so its window is fed only the RR
+    // intervals that survive artifact rejection (the other metrics are far more
+    // tolerant and keep using the raw stream).
+    private val dfaArtifactCorrector = RrArtifactCorrector()
 
     private val _sdnnFlow = MutableStateFlow<Float?>(null)
     val sdnnFlow: StateFlow<Float?> = _sdnnFlow.asStateFlow()
@@ -132,6 +136,7 @@ class PolarBleManager(private val context: Context) {
         calculator.reset()
         stressCalculator.reset()
         dfaCalculator.reset()
+        dfaArtifactCorrector.reset()
         sdnnCalculator.reset()
         pnn50Calculator.reset()
         poincareCalculator.reset()
@@ -251,7 +256,7 @@ class PolarBleManager(private val context: Context) {
                 if (rr <= 0) continue
                 anyRr = true
                 calculator.addInterval(rr)
-                dfaCalculator.addInterval(rr)
+                dfaArtifactCorrector.accept(rr)?.let { dfaCalculator.addInterval(it) }
                 sdnnCalculator.addInterval(rr)
                 pnn50Calculator.addInterval(rr)
                 poincareCalculator.addInterval(rr)
