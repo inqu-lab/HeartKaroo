@@ -44,7 +44,7 @@ class QuadrantAnalysisDataType(
                 }
                 val q = calc.dominantQuadrant()
                 emitter.onNext(
-                    if (q == null) StreamState.NotAvailable
+                    if (q == null) StreamState.Searching
                     else StreamState.Streaming(DataPoint(dataTypeId, mapOf(FIELD to q.toDouble()))),
                 )
             }

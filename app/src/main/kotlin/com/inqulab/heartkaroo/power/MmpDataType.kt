@@ -29,7 +29,7 @@ class MmpDataType(
                     ?: return@collect
                 val v = calc.add(System.currentTimeMillis(), p)
                 emitter.onNext(
-                    if (v == null) StreamState.NotAvailable
+                    if (v == null) StreamState.Searching
                     else StreamState.Streaming(DataPoint(dataTypeId, mapOf(dataTypeId to v.toDouble()))),
                 )
             }

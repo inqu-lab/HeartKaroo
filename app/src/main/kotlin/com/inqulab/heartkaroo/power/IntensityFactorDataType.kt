@@ -36,7 +36,7 @@ class IntensityFactorDataType(
                 val ftp = settings.ftpW.coerceAtLeast(1)
                 val ifVal = np.normalizedPower()?.let { it / ftp }
                 emitter.onNext(
-                    if (ifVal == null) StreamState.NotAvailable
+                    if (ifVal == null) StreamState.Searching
                     else StreamState.Streaming(DataPoint(dataTypeId, mapOf(FIELD to ifVal.toDouble()))),
                 )
             }

@@ -149,13 +149,17 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
     }
 
     override fun startScan(emitter: Emitter<Device>) {
-        val stop = bleManager.startDeviceScan @androidx.annotation.RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT) { btDevice ->
+        val stop = bleManager.startDeviceScan { device ->
             emitter.onNext(
                 Device(
                     extension = EXTENSION_ID,
-                    uid = btDevice.address,
+                    uid = device.id,
                     dataTypes = listOf(DataType.Type.HEART_RATE),
-                    displayName = btDevice.name ?: "Polar H10",
+                    // Suffix so this entry is distinguishable from Karoo's own
+                    // native HR pairing of the same strap. Pair THIS one only —
+                    // it provides both HR and HRV from the single H10 connection
+                    // (the strap allows only one BLE link at a time).
+                    displayName = "${device.name} (HR+HRV)",
                 )
             )
         }

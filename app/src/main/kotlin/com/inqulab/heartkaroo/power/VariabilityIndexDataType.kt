@@ -35,7 +35,7 @@ class VariabilityIndexDataType(
                 val a = np.averagePower()
                 val vi = if (n != null && a != null && a > 0f) n / a else null
                 emitter.onNext(
-                    if (vi == null) StreamState.NotAvailable
+                    if (vi == null) StreamState.Searching
                     else StreamState.Streaming(DataPoint(dataTypeId, mapOf(FIELD to vi.toDouble()))),
                 )
             }

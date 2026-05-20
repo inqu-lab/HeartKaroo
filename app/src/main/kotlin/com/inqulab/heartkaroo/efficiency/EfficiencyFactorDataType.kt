@@ -39,7 +39,7 @@ class EfficiencyFactorDataType(
                 .collect { (p, h) ->
                     val now = System.currentTimeMillis()
                     val ef = if (p != null && h != null) calc.add(now, p, h) else calc.current()
-                    val state = if (ef == null) StreamState.NotAvailable
+                    val state = if (ef == null) StreamState.Searching
                     else StreamState.Streaming(
                         DataPoint(dataTypeId, mapOf(FIELD to ef.toDouble())),
                     )

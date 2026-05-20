@@ -40,7 +40,7 @@ class CardiacCostDataType(
                 val now = System.currentTimeMillis()
                 val cc = if (p != null && h != null) calc.add(now, p, h) else calc.current()
                 emitter.onNext(
-                    if (cc == null) StreamState.NotAvailable
+                    if (cc == null) StreamState.Searching
                     else StreamState.Streaming(DataPoint(dataTypeId, mapOf(FIELD to cc.toDouble()))),
                 )
             }

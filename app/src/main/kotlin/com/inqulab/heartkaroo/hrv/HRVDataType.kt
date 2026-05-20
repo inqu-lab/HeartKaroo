@@ -2,12 +2,8 @@ package com.inqulab.heartkaroo.hrv
 
 import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.internal.Emitter
-import io.hammerhead.karooext.models.DataPoint
-import io.hammerhead.karooext.models.DataType
 import io.hammerhead.karooext.models.StreamState
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
 
 class HRVDataType(
     private val bleManager: PolarBleManager,
@@ -19,23 +15,10 @@ class HRVDataType(
     }
 
     override fun startStream(emitter: Emitter<StreamState>) {
-        emitter.onNext(StreamState.NotAvailable)
-        val job = CoroutineScope(Dispatchers.IO).launch {
-            bleManager.rmssdFlow.collect { rmssd ->
-                if (rmssd > 0f) {
-                    emitter.onNext(
-                        StreamState.Streaming(
-                            DataPoint(
-                                dataTypeId = dataTypeId,
-                                values = mapOf(DataType.Field.SINGLE to rmssd.toDouble()),
-                            )
-                        )
-                    )
-                } else {
-                    emitter.onNext(StreamState.NotAvailable)
-                }
-            }
-        }
-        emitter.setCancellable { job.cancel() }
+        // rmssdFlow uses 0 to mean "no value yet"; map it to null so the shared
+        // hold logic treats it like the other HRV fields.
+        val source = bleManager.rmssdFlow.map { if (it > 0f) it else null }
+        val cancel = streamFloatWithHold(source, dataTypeId, emitter)
+        emitter.setCancellable { cancel() }
     }
 }

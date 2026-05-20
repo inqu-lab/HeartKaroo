@@ -32,7 +32,7 @@ class CoastingDataType(
                     ?: return@collect
                 val pct = calc.add(System.currentTimeMillis(), p)
                 emitter.onNext(
-                    if (pct == null) StreamState.NotAvailable
+                    if (pct == null) StreamState.Searching
                     else StreamState.Streaming(DataPoint(dataTypeId, mapOf(FIELD to pct.toDouble()))),
                 )
             }
