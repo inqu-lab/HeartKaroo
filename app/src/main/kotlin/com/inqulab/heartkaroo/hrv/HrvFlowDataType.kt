@@ -39,10 +39,10 @@ internal fun streamFloatWithHold(
     dataTypeId: String,
     emitter: Emitter<StreamState>,
     holdMs: Long = HOLD_MS,
+    // Single-threaded by default so the collector and the hold timer can share
+    // lastValue/holdJob without a data race; overridable for tests.
+    scope: CoroutineScope = CoroutineScope(Dispatchers.Default.limitedParallelism(1)),
 ): () -> Unit {
-    // Single-threaded so the collector and the hold timer can share lastValue/
-    // holdJob without a data race.
-    val scope = CoroutineScope(Dispatchers.Default.limitedParallelism(1))
     val job = scope.launch {
         var lastValue: Double? = null
         var holdJob: Job? = null

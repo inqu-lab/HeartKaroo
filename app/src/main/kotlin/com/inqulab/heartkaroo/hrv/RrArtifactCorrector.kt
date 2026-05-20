@@ -21,14 +21,17 @@ class RrArtifactCorrector(
     private val thresholdFrac: Double = 0.25,
     private val referenceSize: Int = 5,
     private val maxConsecutiveRejections: Int = 4,
+    private val rateWindow: Int = 60,
 ) {
     private val recent = ArrayDeque<Int>()
     private var consecutiveRejections = 0
+    private val decisions = ArrayDeque<Boolean>() // true = rejected as artifact
 
     /** Returns the RR to feed the DFA window, or null if it's an artifact. */
     fun accept(rrMs: Int): Int? {
         if (recent.isEmpty()) {
             recent.addLast(rrMs)
+            record(rejected = false)
             return rrMs
         }
         val ref = median(recent)
@@ -40,19 +43,35 @@ class RrArtifactCorrector(
                 recent.clear()
                 recent.addLast(rrMs)
                 consecutiveRejections = 0
+                record(rejected = false)
                 return rrMs
             }
+            record(rejected = true)
             return null
         }
         consecutiveRejections = 0
         recent.addLast(rrMs)
         if (recent.size > referenceSize) recent.removeFirst()
+        record(rejected = false)
         return rrMs
+    }
+
+    /** Fraction of recent beats rejected as artifacts (0..1) over [rateWindow].
+     *  DFA α1 is unreliable once this is more than a few percent. */
+    fun recentArtifactRate(): Double {
+        if (decisions.isEmpty()) return 0.0
+        return decisions.count { it }.toDouble() / decisions.size
     }
 
     fun reset() {
         recent.clear()
         consecutiveRejections = 0
+        decisions.clear()
+    }
+
+    private fun record(rejected: Boolean) {
+        decisions.addLast(rejected)
+        if (decisions.size > rateWindow) decisions.removeFirst()
     }
 
     private fun median(values: Collection<Int>): Double {
