@@ -23,13 +23,13 @@ class HrvFlowDataType(
 ) : DataTypeImpl(extensionId, typeId) {
 
     override fun startStream(emitter: Emitter<StreamState>) {
-        // Emit NotAvailable up front so Karoo renders "—" instead of "no sensor"
-        // while the strap is connecting or while the HRV window is still filling.
-        emitter.onNext(StreamState.NotAvailable)
+        // Searching (not NotAvailable) while the strap connects / the HRV
+        // window fills. NotAvailable is the state Karoo renders as "no sensor".
+        emitter.onNext(StreamState.Searching)
         val job = CoroutineScope(Dispatchers.IO).launch {
             source.collect { value ->
                 if (value == null) {
-                    emitter.onNext(StreamState.NotAvailable)
+                    emitter.onNext(StreamState.Searching)
                 } else {
                     emitter.onNext(
                         StreamState.Streaming(

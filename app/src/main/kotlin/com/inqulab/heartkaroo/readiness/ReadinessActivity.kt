@@ -1,7 +1,6 @@
 package com.inqulab.heartkaroo.readiness
 
 import android.Manifest
-import android.bluetooth.BluetoothDevice
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -123,12 +122,12 @@ class ReadinessActivity : AppCompatActivity() {
         verdictView.text = ""
         stopScan = bleManager.startDeviceScan { device ->
             stopScan?.invoke(); stopScan = null
-            statusView.text = getString(R.string.readiness_connecting_fmt, device.name ?: device.address)
+            statusView.text = getString(R.string.readiness_connecting_fmt, device.name)
             beginConnection(device)
         }
     }
 
-    private fun beginConnection(device: BluetoothDevice) {
+    private fun beginConnection(device: PolarBleManager.DiscoveredDevice) {
         connectionJob = lifecycleScope.launch(Dispatchers.IO) {
             try {
                 bleManager.connect(device.address).collect { /* keep flow alive */ }

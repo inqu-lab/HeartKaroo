@@ -19,7 +19,7 @@ class HRVDataType(
     }
 
     override fun startStream(emitter: Emitter<StreamState>) {
-        emitter.onNext(StreamState.NotAvailable)
+        emitter.onNext(StreamState.Searching)
         val job = CoroutineScope(Dispatchers.IO).launch {
             bleManager.rmssdFlow.collect { rmssd ->
                 if (rmssd > 0f) {
@@ -32,7 +32,7 @@ class HRVDataType(
                         )
                     )
                 } else {
-                    emitter.onNext(StreamState.NotAvailable)
+                    emitter.onNext(StreamState.Searching)
                 }
             }
         }

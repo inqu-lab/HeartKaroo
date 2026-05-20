@@ -1,7 +1,5 @@
 package com.inqulab.heartkaroo.hrv
 
-import android.bluetooth.BluetoothDevice
-import android.bluetooth.BluetoothManager
 import android.content.Context
 import com.polar.androidcommunications.api.ble.model.DisInfo
 import com.polar.sdk.api.PolarBleApi
@@ -17,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
+import java.util.Collections
 
 /**
  * Wraps Polar's official BLE SDK so the Karoo extension talks to the H10
@@ -39,9 +38,8 @@ class PolarBleManager(private val context: Context) {
         data class Heartrate(val bpm: Int) : BleEvent()
     }
 
-    private val bluetoothManager =
-        context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-    private val bluetoothAdapter = bluetoothManager.adapter
+    /** A strap found during [startDeviceScan]. */
+    data class DiscoveredDevice(val address: String, val name: String)
 
     private val api: PolarBleApi by lazy {
         PolarBleApiDefaultImpl.defaultImplementation(
@@ -116,15 +114,18 @@ class PolarBleManager(private val context: Context) {
         _ectopicRateFlow.value = null
     }
 
-    fun startDeviceScan(onDevice: (BluetoothDevice) -> Unit): () -> Unit {
+    fun startDeviceScan(onDevice: (DiscoveredDevice) -> Unit): () -> Unit {
+        // searchForDevice() can re-emit the same strap as it keeps scanning;
+        // dedupe by address so the strap is offered to Karoo only once.
+        val seen = Collections.synchronizedSet(mutableSetOf<String>())
         val disposable = api.searchForDevice()
             .subscribeOn(Schedulers.io())
             .subscribe(
                 { info ->
-                    val adapter = bluetoothAdapter ?: return@subscribe
-                    runCatching { adapter.getRemoteDevice(info.address) }
-                        .getOrNull()
-                        ?.let(onDevice)
+                    if (seen.add(info.address)) {
+                        val name = info.name.ifBlank { "Polar HRM" }
+                        onDevice(DiscoveredDevice(info.address, name))
+                    }
                 },
                 { /* ignore scan errors */ },
             )

@@ -25,11 +25,11 @@ class DfaAlpha1DataType(
     }
 
     override fun startStream(emitter: Emitter<StreamState>) {
-        emitter.onNext(StreamState.NotAvailable)
+        emitter.onNext(StreamState.Searching)
         val job = CoroutineScope(Dispatchers.IO).launch {
             bleManager.dfaAlpha1Flow.collect { alpha ->
                 if (alpha == null) {
-                    emitter.onNext(StreamState.NotAvailable)
+                    emitter.onNext(StreamState.Searching)
                 } else {
                     emitter.onNext(
                         StreamState.Streaming(

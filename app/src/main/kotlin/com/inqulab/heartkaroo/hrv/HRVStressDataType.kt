@@ -25,11 +25,11 @@ class HRVStressDataType(
     }
 
     override fun startStream(emitter: Emitter<StreamState>) {
-        emitter.onNext(StreamState.NotAvailable)
+        emitter.onNext(StreamState.Searching)
         val job = CoroutineScope(Dispatchers.IO).launch {
             bleManager.stressFlow.collect { stress ->
                 if (stress == null) {
-                    emitter.onNext(StreamState.NotAvailable)
+                    emitter.onNext(StreamState.Searching)
                 } else {
                     emitter.onNext(
                         StreamState.Streaming(
