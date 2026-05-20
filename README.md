@@ -156,6 +156,14 @@ Unit tests cover the pure-Kotlin pieces:
 - `HeartRateMeasurementTest` — BLE Heart Rate Measurement parsing for
   8/16-bit HR and zero/one/many RR intervals.
 
+The SharedPreferences-backed classes (`ReadinessStore`,
+`AerobicThresholdStore`, `OptimalCadenceStore`, `RiderSettings`) are
+covered by [Robolectric](https://robolectric.org/) tests that run on the
+JVM under the same `./gradlew test` — no device or emulator needed. They
+exercise the real persistence: record/read round-trips, the 7- and
+90-day window eviction, input validation, defaults, and tolerance of
+malformed stored values.
+
 ## Adding the data fields to a ride profile
 
 1. On the Karoo: **Settings → Profiles → [your profile] → Data Fields**.
