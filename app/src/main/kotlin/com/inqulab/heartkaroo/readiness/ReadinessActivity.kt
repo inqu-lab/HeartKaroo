@@ -130,7 +130,7 @@ class ReadinessActivity : AppCompatActivity() {
     private fun beginConnection(device: PolarBleManager.DiscoveredDevice) {
         connectionJob = lifecycleScope.launch(Dispatchers.IO) {
             try {
-                bleManager.connect(device.address).collect { /* keep flow alive */ }
+                bleManager.connect(device.id).collect { /* keep flow alive */ }
             } catch (_: SecurityException) {
                 withContext(Dispatchers.Main) {
                     statusView.text = getString(R.string.readiness_permissions_required)

@@ -38,8 +38,8 @@ class PolarBleManager(private val context: Context) {
         data class Heartrate(val bpm: Int) : BleEvent()
     }
 
-    /** A strap found during [startDeviceScan]. */
-    data class DiscoveredDevice(val address: String, val name: String)
+    /** A strap found during [startDeviceScan]. [id] is the Polar device id. */
+    data class DiscoveredDevice(val id: String, val name: String)
 
     private val api: PolarBleApi by lazy {
         PolarBleApiDefaultImpl.defaultImplementation(
@@ -115,16 +115,18 @@ class PolarBleManager(private val context: Context) {
     }
 
     fun startDeviceScan(onDevice: (DiscoveredDevice) -> Unit): () -> Unit {
-        // searchForDevice() can re-emit the same strap as it keeps scanning;
-        // dedupe by address so the strap is offered to Karoo only once.
+        // searchForDevice() re-emits the same strap repeatedly while scanning,
+        // sometimes under a rotating BT address. Dedupe on the stable Polar
+        // device id (which is also what connectToDevice()/the callbacks use)
+        // so each physical strap is offered to Karoo exactly once.
         val seen = Collections.synchronizedSet(mutableSetOf<String>())
         val disposable = api.searchForDevice()
             .subscribeOn(Schedulers.io())
             .subscribe(
                 { info ->
-                    if (seen.add(info.address)) {
-                        val name = info.name.ifBlank { "Polar HRM" }
-                        onDevice(DiscoveredDevice(info.address, name))
+                    val id = info.deviceId.ifBlank { info.address }
+                    if (id.isNotBlank() && info.isConnectable && seen.add(id)) {
+                        onDevice(DiscoveredDevice(id, info.name.ifBlank { "Polar HRM" }))
                     }
                 },
                 { /* ignore scan errors */ },
@@ -132,7 +134,7 @@ class PolarBleManager(private val context: Context) {
         return { disposable.dispose() }
     }
 
-    fun connect(address: String): Flow<BleEvent> = callbackFlow {
+    fun connect(deviceId: String): Flow<BleEvent> = callbackFlow {
         val scope = this
         var hrDisposable: Disposable? = null
 
@@ -177,11 +179,11 @@ class PolarBleManager(private val context: Context) {
         }
 
         api.setApiCallback(callback)
-        runCatching { api.connectToDevice(address) }
+        runCatching { api.connectToDevice(deviceId) }
 
         awaitClose {
             hrDisposable?.dispose()
-            runCatching { api.disconnectFromDevice(address) }
+            runCatching { api.disconnectFromDevice(deviceId) }
             _connectedFlow.value = false
             resetHrvCalculators()
         }

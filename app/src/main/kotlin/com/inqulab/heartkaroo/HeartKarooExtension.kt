@@ -153,7 +153,7 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             emitter.onNext(
                 Device(
                     extension = EXTENSION_ID,
-                    uid = device.address,
+                    uid = device.id,
                     dataTypes = listOf(DataType.Type.HEART_RATE),
                     // Suffix so this entry is distinguishable from Karoo's own
                     // native HR pairing of the same strap. Pair THIS one only —
