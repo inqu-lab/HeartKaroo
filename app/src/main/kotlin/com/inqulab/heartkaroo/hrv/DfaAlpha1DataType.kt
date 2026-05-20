@@ -2,12 +2,7 @@ package com.inqulab.heartkaroo.hrv
 
 import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.internal.Emitter
-import io.hammerhead.karooext.models.DataPoint
-import io.hammerhead.karooext.models.DataType
 import io.hammerhead.karooext.models.StreamState
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 /**
  * Custom data field exposed to Karoo as "DFA α1".
@@ -25,23 +20,7 @@ class DfaAlpha1DataType(
     }
 
     override fun startStream(emitter: Emitter<StreamState>) {
-        emitter.onNext(StreamState.Searching)
-        val job = CoroutineScope(Dispatchers.IO).launch {
-            bleManager.dfaAlpha1Flow.collect { alpha ->
-                if (alpha == null) {
-                    emitter.onNext(StreamState.Searching)
-                } else {
-                    emitter.onNext(
-                        StreamState.Streaming(
-                            DataPoint(
-                                dataTypeId = dataTypeId,
-                                values = mapOf(DataType.Field.SINGLE to alpha.toDouble()),
-                            )
-                        )
-                    )
-                }
-            }
-        }
-        emitter.setCancellable { job.cancel() }
+        val cancel = streamFloatWithHold(bleManager.dfaAlpha1Flow, dataTypeId, emitter)
+        emitter.setCancellable { cancel() }
     }
 }
