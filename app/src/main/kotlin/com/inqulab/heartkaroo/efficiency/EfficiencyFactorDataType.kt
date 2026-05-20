@@ -2,11 +2,15 @@ package com.inqulab.heartkaroo.efficiency
 
 import com.inqulab.heartkaroo.HeartKarooExtension
 import com.inqulab.heartkaroo.karoo.streamDataFlow
+import android.content.Context
 import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.internal.Emitter
+import io.hammerhead.karooext.internal.ViewEmitter
 import io.hammerhead.karooext.models.DataPoint
 import io.hammerhead.karooext.models.DataType
 import io.hammerhead.karooext.models.StreamState
+import io.hammerhead.karooext.models.UpdateNumericConfig
+import io.hammerhead.karooext.models.ViewConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -47,6 +51,13 @@ class EfficiencyFactorDataType(
                 }
         }
         emitter.setCancellable { job.cancel(); scope.cancel() }
+    }
+
+    // EF (NP/HR) is a ~1.0–3.0 ratio; without a format hint Karoo renders it as a
+    // whole number. Borrow Intensity Factor's dimensionless two-decimal format.
+    override fun startView(context: Context, config: ViewConfig, emitter: ViewEmitter) {
+        emitter.onNext(UpdateNumericConfig(formatDataTypeId = DataType.Type.INTENSITY_FACTOR))
+        emitter.setCancellable {}
     }
 }
 

@@ -1,10 +1,14 @@
 package com.inqulab.heartkaroo.hrv
 
+import android.content.Context
 import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.internal.Emitter
+import io.hammerhead.karooext.internal.ViewEmitter
 import io.hammerhead.karooext.models.DataPoint
 import io.hammerhead.karooext.models.DataType
 import io.hammerhead.karooext.models.StreamState
+import io.hammerhead.karooext.models.UpdateNumericConfig
+import io.hammerhead.karooext.models.ViewConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -93,10 +97,19 @@ class HrvFlowDataType(
     typeId: String,
     private val source: Flow<Float?>,
     private val connected: Flow<Boolean>,
+    // When set, render the value with this built-in type's precision (e.g. a
+    // dimensionless ratio that Karoo would otherwise show as a whole number).
+    private val formatDataTypeId: String? = null,
 ) : DataTypeImpl(extensionId, typeId) {
 
     override fun startStream(emitter: Emitter<StreamState>) {
         val cancel = streamFloatWithHold(source, connected, dataTypeId, emitter)
         emitter.setCancellable { cancel() }
+    }
+
+    override fun startView(context: Context, config: ViewConfig, emitter: ViewEmitter) {
+        if (formatDataTypeId == null) return
+        emitter.onNext(UpdateNumericConfig(formatDataTypeId = formatDataTypeId))
+        emitter.setCancellable {}
     }
 }

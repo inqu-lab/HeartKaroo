@@ -3,11 +3,15 @@ package com.inqulab.heartkaroo.power
 import com.inqulab.heartkaroo.HeartKarooExtension
 import com.inqulab.heartkaroo.karoo.streamDataFlow
 import com.inqulab.heartkaroo.settings.RiderSettings
+import android.content.Context
 import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.internal.Emitter
+import io.hammerhead.karooext.internal.ViewEmitter
 import io.hammerhead.karooext.models.DataPoint
 import io.hammerhead.karooext.models.DataType
 import io.hammerhead.karooext.models.StreamState
+import io.hammerhead.karooext.models.UpdateNumericConfig
+import io.hammerhead.karooext.models.ViewConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -42,5 +46,12 @@ class IntensityFactorDataType(
             }
         }
         emitter.setCancellable { job.cancel(); scope.cancel() }
+    }
+
+    // IF is a ~0.7–1.1 ratio; without a format hint Karoo renders it as a whole
+    // number. Use the native Intensity Factor formatting (two decimals).
+    override fun startView(context: Context, config: ViewConfig, emitter: ViewEmitter) {
+        emitter.onNext(UpdateNumericConfig(formatDataTypeId = DataType.Type.INTENSITY_FACTOR))
+        emitter.setCancellable {}
     }
 }
