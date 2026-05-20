@@ -88,6 +88,7 @@ class ReadinessActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         stopMeasurement()
+        bleManager.shutdown()
     }
 
     private fun renderBaselineSummary() {

@@ -2,7 +2,6 @@
 <resources>
     <string name="app_name">HeartKaroo</string>
     <string name="extension_name">HeartKaroo</string>
-    <string name="fg_connection_text">Connected to heart-rate strap</string>
 
     <string name="decoupling_name">Pw:Hr Decoupling</string>
     <string name="decoupling_description" formatted="false">Real-time aerobic decoupling between power and heart rate (%). Lower is better; under 5% indicates well-coupled aerobic effort.</string>

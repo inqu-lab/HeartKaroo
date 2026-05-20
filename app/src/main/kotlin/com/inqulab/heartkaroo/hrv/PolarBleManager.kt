@@ -41,7 +41,29 @@ class PolarBleManager(private val context: Context) {
     /** A strap found during [startDeviceScan]. [id] is the BT MAC address. */
     data class DiscoveredDevice(val id: String, val name: String)
 
-    private val api: PolarBleApi by lazy { sharedApi(context) }
+    // Each owner (the extension service, the Readiness screen) gets its own API
+    // instance. They must NOT share one: a shared instance means tearing down
+    // one owner (e.g. leaving the settings screen) calls disconnectFromDevice on
+    // the connection the other owner (the ride) is using, killing HR mid-ride.
+    // Call shutdown() to release this instance when the owner is destroyed.
+    private val api: PolarBleApi by lazy {
+        PolarBleApiDefaultImpl.defaultImplementation(
+            context.applicationContext,
+            setOf(
+                PolarBleApi.PolarBleSdkFeature.FEATURE_HR,
+                PolarBleApi.PolarBleSdkFeature.FEATURE_BATTERY_INFO,
+                PolarBleApi.PolarBleSdkFeature.FEATURE_DEVICE_INFO,
+            ),
+        ).apply { setAutomaticReconnection(true) }
+    }
+
+    /** Releases the underlying BLE stack. Call when the owner is destroyed so a
+     *  short-lived owner (the Readiness screen) doesn't leak a second stack. */
+    fun shutdown() {
+        scanDisposable?.dispose()
+        scanDisposable = null
+        runCatching { api.shutDown() }
+    }
 
     companion object {
         // After a gap longer than this, the retained HRV windows are stale and
@@ -52,24 +74,6 @@ class PolarBleManager(private val context: Context) {
         // DFA α1 is withheld when more than this fraction of recent beats are
         // artifacts — past a few percent the exponent is no longer trustworthy.
         private const val MAX_ALPHA1_ARTIFACT_RATE = 0.05
-
-        // A single Polar BLE stack for the whole process. The extension service
-        // and the Readiness screen each hold a PolarBleManager; without this they
-        // would spin up two BLE stacks that fight over the radio and cause drops.
-        @Volatile
-        private var sharedApiInstance: PolarBleApi? = null
-
-        private fun sharedApi(context: Context): PolarBleApi =
-            sharedApiInstance ?: synchronized(this) {
-                sharedApiInstance ?: PolarBleApiDefaultImpl.defaultImplementation(
-                    context.applicationContext,
-                    setOf(
-                        PolarBleApi.PolarBleSdkFeature.FEATURE_HR,
-                        PolarBleApi.PolarBleSdkFeature.FEATURE_BATTERY_INFO,
-                        PolarBleApi.PolarBleSdkFeature.FEATURE_DEVICE_INFO,
-                    ),
-                ).apply { setAutomaticReconnection(true) }.also { sharedApiInstance = it }
-            }
     }
 
     // Tracks the active scan so we can stop it before connecting: the Polar SDK

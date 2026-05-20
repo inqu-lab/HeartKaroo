@@ -1,10 +1,5 @@
 package com.inqulab.heartkaroo
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.content.pm.ServiceInfo
-import android.os.Build
-import androidx.core.app.NotificationCompat
 import com.inqulab.heartkaroo.aet.AerobicThresholdCalibrator
 import com.inqulab.heartkaroo.aet.AerobicThresholdDataType
 import com.inqulab.heartkaroo.aet.AerobicThresholdStore
@@ -110,9 +105,6 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
         // the second threshold (so we don't alert repeatedly around the line).
         private const val LOW_BATTERY_PCT = 15
         private const val BATTERY_RECOVERED_PCT = 25
-
-        private const val FG_CHANNEL_ID = "heartkaroo_connection"
-        private const val FG_NOTIFICATION_ID = 1001
     }
 
     lateinit var karooSystem: KarooSystemService
@@ -157,57 +149,6 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO)
-    private var activeConnections = 0
-
-    /** Promote the service to the foreground while a strap connection is wanted,
-     *  so the OS keeps our process alive and the BLE radio unthrottled during a
-     *  ride. Ref-counted so multiple connections share one foreground session. */
-    @Synchronized
-    private fun onConnectionActive() {
-        activeConnections++
-        if (activeConnections == 1) startConnectionForeground()
-    }
-
-    @Synchronized
-    private fun onConnectionInactive() {
-        if (activeConnections > 0) activeConnections--
-        if (activeConnections == 0) {
-            runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
-        }
-    }
-
-    private fun startConnectionForeground() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val mgr = getSystemService(NotificationManager::class.java)
-            if (mgr.getNotificationChannel(FG_CHANNEL_ID) == null) {
-                mgr.createNotificationChannel(
-                    NotificationChannel(
-                        FG_CHANNEL_ID,
-                        getString(R.string.app_name),
-                        NotificationManager.IMPORTANCE_LOW,
-                    ),
-                )
-            }
-        }
-        val notification = NotificationCompat.Builder(this, FG_CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_hrv)
-            .setContentTitle(getString(R.string.app_name))
-            .setContentText(getString(R.string.fg_connection_text))
-            .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
-        runCatching {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(
-                    FG_NOTIFICATION_ID,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
-                )
-            } else {
-                startForeground(FG_NOTIFICATION_ID, notification)
-            }
-        }
-    }
 
     override fun onCreate() {
         super.onCreate()
@@ -262,10 +203,6 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
     }
 
     override fun connectDevice(uid: String, emitter: Emitter<DeviceEvent>) {
-        // Hold the process in the foreground for as long as Karoo wants this
-        // device connected, so Android doesn't throttle/kill the BLE link while
-        // our extension runs in the background during a ride.
-        onConnectionActive()
         emitter.onNext(OnConnectionStatus(ConnectionStatus.SEARCHING))
         val job: Job = CoroutineScope(Dispatchers.IO).launch {
             bleManager.connect(uid).collect { event ->
@@ -286,10 +223,7 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
                 }
             }
         }
-        emitter.setCancellable {
-            job.cancel()
-            onConnectionInactive()
-        }
+        emitter.setCancellable { job.cancel() }
     }
 
     override fun startFit(emitter: Emitter<FitEffect>) {
@@ -387,6 +321,7 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
 
     override fun onDestroy() {
         serviceScope.cancel()
+        bleManager.shutdown()
         karooSystem.disconnect()
         super.onDestroy()
     }
