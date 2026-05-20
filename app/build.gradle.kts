@@ -62,4 +62,10 @@ dependencies {
     // on the JVM via `./gradlew test`, no device or emulator needed.
     testImplementation("org.robolectric:robolectric:4.16")
     testImplementation("androidx.test:core-ktx:1.6.1")
+
+    // Instrumented tests (./gradlew connectedDebugAndroidTest) run on a real
+    // device/emulator against the real Android framework.
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:core-ktx:1.6.1")
 }
