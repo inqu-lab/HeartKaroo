@@ -20,7 +20,9 @@ class DfaAlpha1DataType(
     }
 
     override fun startStream(emitter: Emitter<StreamState>) {
-        val cancel = streamFloatWithHold(bleManager.dfaAlpha1Flow, dataTypeId, emitter)
+        val cancel = streamFloatWithHold(
+            bleManager.dfaAlpha1Flow, bleManager.connectedFlow, dataTypeId, emitter,
+        )
         emitter.setCancellable { cancel() }
     }
 }

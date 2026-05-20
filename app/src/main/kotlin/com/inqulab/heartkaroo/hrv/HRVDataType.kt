@@ -18,7 +18,7 @@ class HRVDataType(
         // rmssdFlow uses 0 to mean "no value yet"; map it to null so the shared
         // hold logic treats it like the other HRV fields.
         val source = bleManager.rmssdFlow.map { if (it > 0f) it else null }
-        val cancel = streamFloatWithHold(source, dataTypeId, emitter)
+        val cancel = streamFloatWithHold(source, bleManager.connectedFlow, dataTypeId, emitter)
         emitter.setCancellable { cancel() }
     }
 }

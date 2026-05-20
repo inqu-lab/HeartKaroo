@@ -20,7 +20,9 @@ class HRVStressDataType(
     }
 
     override fun startStream(emitter: Emitter<StreamState>) {
-        val cancel = streamFloatWithHold(bleManager.stressFlow, dataTypeId, emitter)
+        val cancel = streamFloatWithHold(
+            bleManager.stressFlow, bleManager.connectedFlow, dataTypeId, emitter,
+        )
         emitter.setCancellable { cancel() }
     }
 }
