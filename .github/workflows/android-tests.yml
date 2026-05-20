@@ -23,7 +23,8 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          # Robolectric's Android 16 (SDK 36) jar requires Java 21+.
+          java-version: "21"
       - uses: gradle/actions/setup-gradle@v4
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest --stacktrace
@@ -46,7 +47,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
       - uses: gradle/actions/setup-gradle@v4
       - name: Enable KVM
         run: |
