@@ -154,7 +154,9 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
         super.onCreate()
         karooSystem = KarooSystemService(applicationContext)
         bleManager = PolarBleManager(applicationContext)
-        karooSystem.connect {}
+        karooSystem.connect { connected ->
+            android.util.Log.i("HeartKaroo", "karooSystem connected=$connected")
+        }
         watchStrapBattery()
     }
 
