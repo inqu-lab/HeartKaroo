@@ -54,7 +54,7 @@ Recorded alongside the standard HR record when the strap is active:
 |---|---|
 | `hrv_rmssd` | ms |
 | `hrv_stress_pct` | pct |
-| `dfa_alpha1` | (dimensionless) |
+| `Alpha1` | (dimensionless) |
 | `respiratory_rate` | brpm |
 | `sdnn` | ms |
 | `aet_estimate` | watts |
@@ -62,6 +62,11 @@ Recorded alongside the standard HR record when the strap is active:
 `respiratory_rate` is also tagged with the native FIT record respiration
 field number (108), so apps that understand it (intervals.icu, Garmin
 Connect) read it as real respiration instead of an opaque custom stream.
+
+The DFA α1 field is named `Alpha1` (the alphaHRV Connect IQ convention)
+because that is the exact name intervals.icu looks for — it then computes
+"Average DFA a1" from the stream itself.
+
 The rest have no native FIT equivalent and appear as named developer
 fields (intervals.icu surfaces them under Custom Streams).
 

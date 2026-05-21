@@ -73,7 +73,10 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
         val DFA_ALPHA1_FIELD = DeveloperField(
             fieldDefinitionNumber = 2,
             fitBaseTypeId = 136,
-            fieldName = "dfa_alpha1",
+            // intervals.icu recognises DFA a1 only when the developer field is
+            // named "Alpha1" (the alphaHRV Connect IQ convention) — it then
+            // computes Average DFA a1 from this 1Hz stream itself.
+            fieldName = "Alpha1",
             units = "",
         )
 
