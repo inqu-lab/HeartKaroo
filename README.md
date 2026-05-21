@@ -70,6 +70,16 @@ because that is the exact name intervals.icu looks for — it then computes
 The rest have no native FIT equivalent and appear as named developer
 fields (intervals.icu surfaces them under Custom Streams).
 
+**Per-ride summary (session message).** Written once to the ride's
+session message, so they show up as after-ride numbers (custom activity
+fields in intervals.icu) rather than 1 Hz streams:
+
+| FIT field | Units | Meaning |
+|---|---|---|
+| `aet_estimate` | watts | Final aerobic-threshold estimate for the ride. |
+| `optimal_cadence` | rpm | Best-efficiency cadence (highest W per beat). |
+| `w_prime_min` | J | Lowest W′ balance reached — depth into anaerobic reserve. |
+
 The other secondary HRV metrics (pNN50, SD1/SD2, ectopic rate) are
 derivable post-ride from the recorded RR data, so they stay as
 live-display-only.

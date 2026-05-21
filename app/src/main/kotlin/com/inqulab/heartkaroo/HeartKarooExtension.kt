@@ -25,6 +25,8 @@ import com.inqulab.heartkaroo.hrv.HRVStressDataType
 import com.inqulab.heartkaroo.hrv.HrvFlowDataType
 import com.inqulab.heartkaroo.hrv.PolarBleManager
 import com.inqulab.heartkaroo.karoo.streamDataFlow
+import com.inqulab.heartkaroo.settings.RiderSettings
+import com.inqulab.heartkaroo.wprime.WPrimeBalanceCalculator
 import com.inqulab.heartkaroo.wprime.WPrimeBalanceDataType
 import io.hammerhead.karooext.KarooSystemService
 import io.hammerhead.karooext.extension.KarooExtension
@@ -42,6 +44,7 @@ import io.hammerhead.karooext.models.OnConnectionStatus
 import io.hammerhead.karooext.models.OnDataPoint
 import io.hammerhead.karooext.models.StreamState
 import io.hammerhead.karooext.models.WriteToRecordMesg
+import io.hammerhead.karooext.models.WriteToSessionMesg
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
@@ -103,6 +106,22 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             fitBaseTypeId = 136,
             fieldName = "aet_estimate",
             units = "watts",
+        )
+
+        // After-ride summary fields written to the session message so they
+        // surface as per-ride numbers (custom activity fields in intervals.icu).
+        val OPTIMAL_CADENCE_FIELD = DeveloperField(
+            fieldDefinitionNumber = 6,
+            fitBaseTypeId = 136,
+            fieldName = "optimal_cadence",
+            units = "rpm",
+        )
+
+        val WPRIME_MIN_FIELD = DeveloperField(
+            fieldDefinitionNumber = 7,
+            fitBaseTypeId = 136,
+            fieldName = "w_prime_min",
+            units = "J",
         )
 
         private const val MIN_AET_SAMPLES_TO_PERSIST = 60
@@ -278,15 +297,22 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
                 aetCalibrator.addPower(System.currentTimeMillis(), p)
             }
         }
+        var lastAetSession: Double? = null
         val aetAlphaJob: Job = scope.launch {
             bleManager.dfaAlpha1Flow.filterNotNull().collect { a ->
                 aetCalibrator.addAlpha(a)
                 aetCalibrator.currentEstimate()?.let { est ->
-                    emitter.onNext(WriteToRecordMesg(FieldValue(AET_FIELD, est.toDouble())))
+                    val v = est.toDouble()
+                    emitter.onNext(WriteToRecordMesg(FieldValue(AET_FIELD, v)))
+                    if (v != lastAetSession) {
+                        lastAetSession = v
+                        emitter.onNext(WriteToSessionMesg(FieldValue(AET_FIELD, v)))
+                    }
                 }
             }
         }
         val cadenceCalc = OptimalCadenceCalculator()
+        var lastCadenceSession: Double? = null
         val cadenceJob: Job = scope.launch {
             combine(
                 karooSystem.streamDataFlow(DataType.Type.POWER),
@@ -299,7 +325,33 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
                     (cs as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull(),
                 )
             }.collect { (p, h, c) ->
-                if (p != null && h != null && c != null) cadenceCalc.add(p, h, c)
+                if (p != null && h != null && c != null) {
+                    cadenceCalc.add(p, h, c)
+                    cadenceCalc.optimalCadence()?.let { rpm ->
+                        val v = rpm.toDouble()
+                        if (v != lastCadenceSession) {
+                            lastCadenceSession = v
+                            emitter.onNext(WriteToSessionMesg(FieldValue(OPTIMAL_CADENCE_FIELD, v)))
+                        }
+                    }
+                }
+            }
+        }
+        val wPrimeSettings = RiderSettings(applicationContext)
+        val wPrimeCalc = WPrimeBalanceCalculator(
+            criticalPowerW = wPrimeSettings.criticalPowerW.toDouble(),
+            wPrimeJ = wPrimeSettings.wPrimeJ.toDouble(),
+        )
+        var wPrimeMin = Double.POSITIVE_INFINITY
+        val wPrimeMinJob: Job = scope.launch {
+            karooSystem.streamDataFlow(DataType.Type.POWER).collect { ps ->
+                val p = (ps as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull()
+                    ?: return@collect
+                val bal = wPrimeCalc.add(System.currentTimeMillis(), p).toDouble()
+                if (bal < wPrimeMin) {
+                    wPrimeMin = bal
+                    emitter.onNext(WriteToSessionMesg(FieldValue(WPRIME_MIN_FIELD, wPrimeMin)))
+                }
             }
         }
         emitter.setCancellable {
@@ -311,6 +363,7 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             aetPowerJob.cancel()
             aetAlphaJob.cancel()
             cadenceJob.cancel()
+            wPrimeMinJob.cancel()
             val final = aetCalibrator.currentEstimate()
             val samples = aetCalibrator.sampleCount
             if (final != null && samples >= MIN_AET_SAMPLES_TO_PERSIST) {
