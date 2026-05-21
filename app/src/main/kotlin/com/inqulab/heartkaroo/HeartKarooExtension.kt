@@ -39,6 +39,8 @@ import io.hammerhead.karooext.models.FitEffect
 import io.hammerhead.karooext.models.InRideAlert
 import io.hammerhead.karooext.models.OnConnectionStatus
 import io.hammerhead.karooext.models.OnDataPoint
+import io.hammerhead.karooext.models.ReleaseBluetooth
+import io.hammerhead.karooext.models.RequestBluetooth
 import io.hammerhead.karooext.models.WriteToRecordMesg
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -166,7 +168,14 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
         ridePowerEngine = RidePowerEngine(
             karooSystem, RiderSettings(applicationContext), bleManager.dfaAlpha1Flow, serviceScope,
         )
-        karooSystem.connect {}
+        // We run our own BLE stack (Polar SDK) for the strap. Tell Karoo we're
+        // using the radio so the system coordinates with us instead of reclaiming
+        // it when a ride starts — which was dropping the strap. Released in
+        // onDestroy. (The connect callback can fire again on reconnect; the same
+        // resourceId makes a repeat request a no-op.)
+        karooSystem.connect { connected ->
+            if (connected) karooSystem.dispatch(RequestBluetooth(EXTENSION_ID))
+        }
         ridePowerEngine.start()
         watchStrapBattery()
     }
@@ -324,6 +333,7 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
 
     override fun onDestroy() {
         serviceScope.cancel()
+        runCatching { karooSystem.dispatch(ReleaseBluetooth(EXTENSION_ID)) }
         bleManager.disconnect()
         karooSystem.disconnect()
         super.onDestroy()
