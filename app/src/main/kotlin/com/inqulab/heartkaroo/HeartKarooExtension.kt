@@ -258,7 +258,12 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
                         OnDataPoint(
                             DataPoint(
                                 dataTypeId = DataType.Type.HEART_RATE,
-                                values = mapOf(DataType.Field.SINGLE to event.bpm.toDouble()),
+                                // The HR data type reads its value from
+                                // Field.HEART_RATE; under Field.SINGLE it shows but
+                                // is never recorded to the FIT. Tag the sourceId
+                                // with the device uid so Karoo logs it as this sensor.
+                                values = mapOf(DataType.Field.HEART_RATE to event.bpm.toDouble()),
+                                sourceId = uid,
                             )
                         )
                     )
