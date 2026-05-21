@@ -5,15 +5,12 @@ import com.inqulab.heartkaroo.karoo.streamDataFlow
 import com.inqulab.heartkaroo.settings.RiderSettings
 import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.internal.Emitter
-import io.hammerhead.karooext.models.DataPoint
 import io.hammerhead.karooext.models.DataType
 import io.hammerhead.karooext.models.StreamState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
 
 class IntensityFactorDataType(
     private val parent: HeartKarooExtension,
@@ -28,18 +25,14 @@ class IntensityFactorDataType(
         val np = NormalizedPowerCalculator()
         val settings = RiderSettings(parent.applicationContext)
         val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-        val job: Job = scope.launch {
-            parent.karooSystem.streamDataFlow(DataType.Type.POWER).collect { ps ->
-                val p = (ps as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull()
-                    ?: return@collect
-                np.add(System.currentTimeMillis(), p)
-                val ftp = settings.ftpW.coerceAtLeast(1)
-                val ifVal = np.normalizedPower()?.let { it / ftp }
-                emitter.onNext(
-                    if (ifVal == null) StreamState.Searching
-                    else StreamState.Streaming(DataPoint(dataTypeId, mapOf(FIELD to ifVal.toDouble()))),
-                )
-            }
+        val job = scope.collectPowerMetric(
+            parent.karooSystem.streamDataFlow(DataType.Type.POWER),
+            dataTypeId,
+            FIELD,
+            emitter,
+        ) { t, p ->
+            np.add(t, p)
+            PowerMetrics.intensityFactor(np.normalizedPower(), settings.ftpW)
         }
         emitter.setCancellable { job.cancel(); scope.cancel() }
     }

@@ -164,6 +164,25 @@ exercise the real persistence: record/read round-trips, the 7- and
 90-day window eviction, input validation, defaults, and tolerance of
 malformed stored values.
 
+The derived power fields with no separate calculator (`PowerMetrics` —
+Variability Index, Intensity Factor, TSS) and the stream-wiring shared by
+the power and decoupling fields (`collectPowerMetric`, `collectDecoupling`)
+have their own unit tests, as do the strap low-battery alert hysteresis
+(`StrapBatteryAlerter`) and the ride-stop persistence gate
+(`shouldPersistRollingFinal`).
+
+### Coverage
+
+```bash
+./gradlew koverHtmlReportDebug   # HTML report under app/build/reports/kover/
+./gradlew koverXmlReportDebug    # XML for CI tooling
+./gradlew koverLogDebug          # one-line summary to the console
+```
+
+Coverage is measured with [Kover](https://github.com/Kotlin/kotlinx-kover)
+over the `debug` unit tests and is uploaded as a CI artifact; it is
+reported, not gated.
+
 ## Adding the data fields to a ride profile
 
 1. On the Karoo: **Settings → Profiles → [your profile] → Data Fields**.

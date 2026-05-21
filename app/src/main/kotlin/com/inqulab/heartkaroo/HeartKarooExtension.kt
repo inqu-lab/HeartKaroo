@@ -162,10 +162,9 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
      *  warning level, re-arming only once it has recovered (fresh battery). */
     private fun watchStrapBattery() {
         serviceScope.launch {
-            var warned = false
+            val alerter = StrapBatteryAlerter(LOW_BATTERY_PCT, BATTERY_RECOVERED_PCT)
             bleManager.batteryFlow.filterNotNull().collect { level ->
-                if (level <= LOW_BATTERY_PCT && !warned) {
-                    warned = true
+                if (alerter.shouldAlert(level)) {
                     karooSystem.dispatch(
                         InRideAlert(
                             id = "heartkaroo-strap-battery",
@@ -177,8 +176,6 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
                             textColor = android.R.color.white,
                         )
                     )
-                } else if (level > BATTERY_RECOVERED_PCT) {
-                    warned = false
                 }
             }
         }
@@ -306,15 +303,15 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             cadenceJob.cancel()
             val final = aetCalibrator.currentEstimate()
             val samples = aetCalibrator.sampleCount
-            if (final != null && samples >= MIN_AET_SAMPLES_TO_PERSIST) {
+            if (shouldPersistRollingFinal(final, samples, MIN_AET_SAMPLES_TO_PERSIST)) {
                 AerobicThresholdStore(applicationContext)
-                    .record(System.currentTimeMillis(), final, samples)
+                    .record(System.currentTimeMillis(), final!!, samples)
             }
             val cadenceFinal = cadenceCalc.optimalCadence()
             val cadenceSamples = cadenceCalc.totalSamples
-            if (cadenceFinal != null && cadenceSamples >= MIN_CADENCE_SAMPLES_TO_PERSIST) {
+            if (shouldPersistRollingFinal(cadenceFinal, cadenceSamples, MIN_CADENCE_SAMPLES_TO_PERSIST)) {
                 OptimalCadenceStore(applicationContext)
-                    .record(System.currentTimeMillis(), cadenceFinal, cadenceSamples)
+                    .record(System.currentTimeMillis(), cadenceFinal!!, cadenceSamples)
             }
         }
     }

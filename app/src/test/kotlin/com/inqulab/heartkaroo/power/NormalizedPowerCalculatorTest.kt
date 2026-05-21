@@ -24,6 +24,22 @@ class NormalizedPowerCalculatorTest {
     }
 
     @Test
+    fun `elapsedSec is zero with fewer than two samples`() {
+        val np = NormalizedPowerCalculator()
+        assertEquals(0.0, np.elapsedSec(), 1e-9)
+        np.add(1_000L, 200.0)
+        assertEquals(0.0, np.elapsedSec(), 1e-9)
+    }
+
+    @Test
+    fun `elapsedSec spans first to last retained sample`() {
+        val np = NormalizedPowerCalculator()
+        np.add(1_000L, 200.0)
+        np.add(6_000L, 200.0)
+        assertEquals(5.0, np.elapsedSec(), 1e-9)
+    }
+
+    @Test
     fun `spiky power yields NP greater than AP`() {
         val np = NormalizedPowerCalculator(minSamples = 30, smoothingMs = 30_000L)
         for (s in 0..600) {
