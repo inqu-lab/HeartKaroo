@@ -165,11 +165,20 @@ exercise the real persistence: record/read round-trips, the 7- and
 malformed stored values.
 
 The derived power fields with no separate calculator (`PowerMetrics` —
-Variability Index, Intensity Factor, TSS) and the stream-wiring shared by
-the power and decoupling fields (`collectPowerMetric`, `collectDecoupling`)
-have their own unit tests, as do the strap low-battery alert hysteresis
+Variability Index, Intensity Factor, TSS) and the shared stream-wiring
+helpers (`collectStreamMetric` / `2` / `3` and `collectAetEstimate`) have
+their own unit tests, as do the strap low-battery alert hysteresis
 (`StrapBatteryAlerter`) and the ride-stop persistence gate
 (`shouldPersistRollingFinal`).
+
+The data fields take their input flows (and the coroutine dispatcher) as
+constructor parameters, so each `DataType` is unit-tested by feeding it a
+fake stream and asserting the `Searching` / `Streaming` states it emits —
+no Karoo system or BLE strap required. The in-app screens (`MainActivity`,
+`ReadinessActivity`, `SettingsActivity`) are covered by Robolectric tests
+for their on-launch rendering and input handling; the 2-minute BLE
+measurement loop and the `KarooExtension` service / `PolarBleManager`
+lifecycle still need a device.
 
 ### Coverage
 

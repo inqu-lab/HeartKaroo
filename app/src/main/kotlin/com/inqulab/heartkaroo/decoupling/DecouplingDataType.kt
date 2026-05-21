@@ -1,15 +1,15 @@
 package com.inqulab.heartkaroo.decoupling
 
-import com.inqulab.heartkaroo.HeartKarooExtension
-import com.inqulab.heartkaroo.karoo.streamDataFlow
+import com.inqulab.heartkaroo.karoo.collectStreamMetric2
 import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.internal.Emitter
-import io.hammerhead.karooext.models.DataType
 import io.hammerhead.karooext.models.StreamState
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
 
 /**
  * Custom data field exposed to Karoo as "Pw:Hr Decoupling".
@@ -19,8 +19,11 @@ import kotlinx.coroutines.cancel
  * per second.
  */
 class DecouplingDataType(
-    private val parent: HeartKarooExtension,
-) : DataTypeImpl(parent.extension, TYPE_ID) {
+    extensionId: String,
+    private val powerFlow: Flow<StreamState>,
+    private val hrFlow: Flow<StreamState>,
+    private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
+) : DataTypeImpl(extensionId, TYPE_ID) {
 
     companion object {
         const val TYPE_ID = "decoupling"
@@ -28,18 +31,11 @@ class DecouplingDataType(
     }
 
     override fun startStream(emitter: Emitter<StreamState>) {
-        val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-        val job = scope.collectDecoupling(
-            parent.karooSystem.streamDataFlow(DataType.Type.POWER),
-            parent.karooSystem.streamDataFlow(DataType.Type.HEART_RATE),
-            DecouplingCalculator(),
-            dataTypeId,
-            FIELD,
-            emitter,
-        )
-        emitter.setCancellable {
-            job.cancel()
-            scope.cancel()
+        val calc = DecouplingCalculator()
+        val scope = CoroutineScope(dispatcher + SupervisorJob())
+        val job = scope.collectStreamMetric2(powerFlow, hrFlow, dataTypeId, FIELD, emitter) { t, p, h ->
+            if (p != null && h != null) calc.add(t, p, h) else calc.current()
         }
+        emitter.setCancellable { job.cancel(); scope.cancel() }
     }
 }

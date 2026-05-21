@@ -1,19 +1,15 @@
 package com.inqulab.heartkaroo.cadence
 
-import com.inqulab.heartkaroo.HeartKarooExtension
-import com.inqulab.heartkaroo.karoo.streamDataFlow
+import com.inqulab.heartkaroo.karoo.collectStreamMetric3
 import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.internal.Emitter
-import io.hammerhead.karooext.models.DataPoint
-import io.hammerhead.karooext.models.DataType
 import io.hammerhead.karooext.models.StreamState
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.Flow
 
 /**
  * Live Karoo data field: best-efficiency cadence learned from the
@@ -21,8 +17,12 @@ import kotlinx.coroutines.launch
  * samples to compare.
  */
 class OptimalCadenceDataType(
-    private val parent: HeartKarooExtension,
-) : DataTypeImpl(parent.extension, TYPE_ID) {
+    extensionId: String,
+    private val powerFlow: Flow<StreamState>,
+    private val hrFlow: Flow<StreamState>,
+    private val cadenceFlow: Flow<StreamState>,
+    private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
+) : DataTypeImpl(extensionId, TYPE_ID) {
 
     companion object {
         const val TYPE_ID = "optimal_cadence"
@@ -31,26 +31,10 @@ class OptimalCadenceDataType(
 
     override fun startStream(emitter: Emitter<StreamState>) {
         val calc = OptimalCadenceCalculator()
-        val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-        val job: Job = scope.launch {
-            combine(
-                parent.karooSystem.streamDataFlow(DataType.Type.POWER),
-                parent.karooSystem.streamDataFlow(DataType.Type.HEART_RATE),
-                parent.karooSystem.streamDataFlow(DataType.Type.CADENCE),
-            ) { ps, hs, cs ->
-                Triple(
-                    (ps as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull(),
-                    (hs as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull(),
-                    (cs as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull(),
-                )
-            }.collect { (p, h, c) ->
-                if (p != null && h != null && c != null) calc.add(p, h, c)
-                val rpm = calc.optimalCadence()
-                emitter.onNext(
-                    if (rpm == null) StreamState.Searching
-                    else StreamState.Streaming(DataPoint(dataTypeId, mapOf(FIELD to rpm.toDouble()))),
-                )
-            }
+        val scope = CoroutineScope(dispatcher + SupervisorJob())
+        val job = scope.collectStreamMetric3(powerFlow, hrFlow, cadenceFlow, dataTypeId, FIELD, emitter) { _, p, h, c ->
+            if (p != null && h != null && c != null) calc.add(p, h, c)
+            calc.optimalCadence()?.toDouble()
         }
         emitter.setCancellable { job.cancel(); scope.cancel() }
     }

@@ -1,23 +1,22 @@
 package com.inqulab.heartkaroo.efficiency
 
-import com.inqulab.heartkaroo.HeartKarooExtension
-import com.inqulab.heartkaroo.karoo.streamDataFlow
+import com.inqulab.heartkaroo.karoo.collectStreamMetric2
 import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.internal.Emitter
-import io.hammerhead.karooext.models.DataPoint
-import io.hammerhead.karooext.models.DataType
 import io.hammerhead.karooext.models.StreamState
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.Flow
 
 class CardiacCostDataType(
-    private val parent: HeartKarooExtension,
-) : DataTypeImpl(parent.extension, TYPE_ID) {
+    extensionId: String,
+    private val powerFlow: Flow<StreamState>,
+    private val hrFlow: Flow<StreamState>,
+    private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
+) : DataTypeImpl(extensionId, TYPE_ID) {
 
     companion object {
         const val TYPE_ID = "cardiac_cost"
@@ -26,24 +25,9 @@ class CardiacCostDataType(
 
     override fun startStream(emitter: Emitter<StreamState>) {
         val calc = CardiacCostCalculator()
-        val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-        val job: Job = scope.launch {
-            combine(
-                parent.karooSystem.streamDataFlow(DataType.Type.POWER),
-                parent.karooSystem.streamDataFlow(DataType.Type.HEART_RATE),
-            ) { ps, hs ->
-                Pair(
-                    (ps as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull(),
-                    (hs as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull(),
-                )
-            }.collect { (p, h) ->
-                val now = System.currentTimeMillis()
-                val cc = if (p != null && h != null) calc.add(now, p, h) else calc.current()
-                emitter.onNext(
-                    if (cc == null) StreamState.Searching
-                    else StreamState.Streaming(DataPoint(dataTypeId, mapOf(FIELD to cc.toDouble()))),
-                )
-            }
+        val scope = CoroutineScope(dispatcher + SupervisorJob())
+        val job = scope.collectStreamMetric2(powerFlow, hrFlow, dataTypeId, FIELD, emitter) { t, p, h ->
+            (if (p != null && h != null) calc.add(t, p, h) else calc.current())?.toDouble()
         }
         emitter.setCancellable { job.cancel(); scope.cancel() }
     }

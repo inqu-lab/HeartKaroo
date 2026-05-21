@@ -25,6 +25,7 @@ import com.inqulab.heartkaroo.hrv.HRVStressDataType
 import com.inqulab.heartkaroo.hrv.HrvFlowDataType
 import com.inqulab.heartkaroo.hrv.PolarBleManager
 import com.inqulab.heartkaroo.karoo.streamDataFlow
+import com.inqulab.heartkaroo.settings.RiderSettings
 import com.inqulab.heartkaroo.wprime.WPrimeBalanceDataType
 import io.hammerhead.karooext.KarooSystemService
 import io.hammerhead.karooext.extension.KarooExtension
@@ -114,27 +115,35 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
         private set
 
     override val types by lazy {
+        fun power() = karooSystem.streamDataFlow(DataType.Type.POWER)
+        fun hr() = karooSystem.streamDataFlow(DataType.Type.HEART_RATE)
+        fun cadence() = karooSystem.streamDataFlow(DataType.Type.CADENCE)
         listOf(
-            DecouplingDataType(this),
-            PaHrDecouplingDataType(this),
-            EfficiencyFactorDataType(this),
-            CardiacCostDataType(this),
-            WPrimeBalanceDataType(this),
-            CardiacPopDataType(this),
-            AerobicThresholdDataType(this),
-            OptimalCadenceDataType(this),
-            VariabilityIndexDataType(this),
-            IntensityFactorDataType(this),
-            TssDataType(this),
-            KilojoulesDataType(this),
-            CoastingDataType(this),
-            QuadrantAnalysisDataType(this),
-            VamDataType(this),
-            MmpDataType(this, 5_000L, "mmp_5s"),
-            MmpDataType(this, 60_000L, "mmp_1min"),
-            MmpDataType(this, 5L * 60 * 1000, "mmp_5min"),
-            MmpDataType(this, 20L * 60 * 1000, "mmp_20min"),
-            MmpDataType(this, 60L * 60 * 1000, "mmp_60min"),
+            DecouplingDataType(EXTENSION_ID, power(), hr()),
+            PaHrDecouplingDataType(EXTENSION_ID, karooSystem.streamDataFlow(DataType.Type.SPEED), hr()),
+            EfficiencyFactorDataType(EXTENSION_ID, power(), hr()),
+            CardiacCostDataType(EXTENSION_ID, power(), hr()),
+            WPrimeBalanceDataType(
+                EXTENSION_ID,
+                power(),
+                { RiderSettings(applicationContext).criticalPowerW },
+                { RiderSettings(applicationContext).wPrimeJ },
+            ),
+            CardiacPopDataType(EXTENSION_ID, power(), hr()),
+            AerobicThresholdDataType(EXTENSION_ID, power(), bleManager.dfaAlpha1Flow),
+            OptimalCadenceDataType(EXTENSION_ID, power(), hr(), cadence()),
+            VariabilityIndexDataType(EXTENSION_ID, power()),
+            IntensityFactorDataType(EXTENSION_ID, power(), { RiderSettings(applicationContext).ftpW }),
+            TssDataType(EXTENSION_ID, power(), { RiderSettings(applicationContext).ftpW }),
+            KilojoulesDataType(EXTENSION_ID, power()),
+            CoastingDataType(EXTENSION_ID, power()),
+            QuadrantAnalysisDataType(EXTENSION_ID, power(), cadence(), { RiderSettings(applicationContext).ftpW }),
+            VamDataType(EXTENSION_ID, karooSystem.streamDataFlow(DataType.Type.ELEVATION_GAIN)),
+            MmpDataType(EXTENSION_ID, "mmp_5s", 5_000L, power()),
+            MmpDataType(EXTENSION_ID, "mmp_1min", 60_000L, power()),
+            MmpDataType(EXTENSION_ID, "mmp_5min", 5L * 60 * 1000, power()),
+            MmpDataType(EXTENSION_ID, "mmp_20min", 20L * 60 * 1000, power()),
+            MmpDataType(EXTENSION_ID, "mmp_60min", 60L * 60 * 1000, power()),
             HRVDataType(bleManager, EXTENSION_ID),
             HRVStressDataType(bleManager, EXTENSION_ID),
             DfaAlpha1DataType(bleManager, EXTENSION_ID),

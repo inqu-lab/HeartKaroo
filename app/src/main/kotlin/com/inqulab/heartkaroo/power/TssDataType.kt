@@ -1,16 +1,15 @@
 package com.inqulab.heartkaroo.power
 
-import com.inqulab.heartkaroo.HeartKarooExtension
-import com.inqulab.heartkaroo.karoo.streamDataFlow
-import com.inqulab.heartkaroo.settings.RiderSettings
+import com.inqulab.heartkaroo.karoo.collectStreamMetric
 import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.internal.Emitter
-import io.hammerhead.karooext.models.DataType
 import io.hammerhead.karooext.models.StreamState
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
 
 /**
  * Live Training Stress Score (Coggan) — TSS = (s × NP × IF) / (FTP × 3600) × 100,
@@ -20,8 +19,11 @@ import kotlinx.coroutines.cancel
  * elapsed window and FTP from RiderSettings.
  */
 class TssDataType(
-    private val parent: HeartKarooExtension,
-) : DataTypeImpl(parent.extension, TYPE_ID) {
+    extensionId: String,
+    private val powerFlow: Flow<StreamState>,
+    private val ftpW: () -> Int,
+    private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
+) : DataTypeImpl(extensionId, TYPE_ID) {
 
     companion object {
         const val TYPE_ID = "tss"
@@ -31,16 +33,10 @@ class TssDataType(
     override fun startStream(emitter: Emitter<StreamState>) {
         // Window the whole ride (4 h) — TSS is cumulative.
         val np = NormalizedPowerCalculator(windowMs = 4 * 60 * 60 * 1000L)
-        val settings = RiderSettings(parent.applicationContext)
-        val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-        val job = scope.collectPowerMetric(
-            parent.karooSystem.streamDataFlow(DataType.Type.POWER),
-            dataTypeId,
-            FIELD,
-            emitter,
-        ) { t, p ->
+        val scope = CoroutineScope(dispatcher + SupervisorJob())
+        val job = scope.collectStreamMetric(powerFlow, dataTypeId, FIELD, emitter) { t, p ->
             np.add(t, p)
-            PowerMetrics.trainingStressScore(np.normalizedPower(), settings.ftpW, np.elapsedSec())
+            PowerMetrics.trainingStressScore(np.normalizedPower(), ftpW(), np.elapsedSec())?.toDouble()
         }
         emitter.setCancellable { job.cancel(); scope.cancel() }
     }
