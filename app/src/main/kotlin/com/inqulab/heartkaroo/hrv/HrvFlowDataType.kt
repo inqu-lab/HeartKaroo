@@ -32,8 +32,10 @@ private fun streaming(dataTypeId: String, value: Double): StreamState.Streaming 
  * strap's [connected] state to pick the right "no value" state:
  *  - not connected            -> Searching (no sensor to read from)
  *  - connected, has value     -> Streaming
- *  - connected, value missing -> hold the last value for [holdMs] (so a brief
- *    glitch doesn't flicker), then Idle (connected but no data right now).
+ *  - connected, value missing  -> if we had a value, hold it for [holdMs] (so a
+ *    brief glitch doesn't flicker) then Searching; if we never had one (warming
+ *    up — DFA α1 needs ~2 min of beats), Searching right away. Never a bare 0:
+ *    Karoo renders Idle as "0", which reads like a real measurement.
  *
  * Returns a cancel handle for the underlying coroutine.
  */
@@ -66,20 +68,20 @@ internal fun streamFloatWithHold(
                         emitter.onNext(StreamState.Searching)
                     }
                     lastValue != null && holdJob == null -> {
-                        // Connected, brief gap: keep the last value, then Idle.
+                        // Connected, brief gap: keep the last value, then Searching.
                         // (The source is a StateFlow, so a sustained null won't
-                        // re-emit; the timer is what flips us to Idle.)
+                        // re-emit; the timer is what flips us over.)
                         emitter.onNext(streaming(dataTypeId, lastValue!!))
                         holdJob = launch {
                             delay(holdMs)
                             lastValue = null
                             holdJob = null
-                            emitter.onNext(StreamState.Idle)
+                            emitter.onNext(StreamState.Searching)
                         }
                     }
                     lastValue == null && holdJob == null -> {
                         // Connected but no value yet (warming up) or hold expired.
-                        emitter.onNext(StreamState.Idle)
+                        emitter.onNext(StreamState.Searching)
                     }
                 }
             }
