@@ -17,8 +17,10 @@ import com.inqulab.heartkaroo.power.IntensityFactorDataType
 import com.inqulab.heartkaroo.power.KilojoulesDataType
 import com.inqulab.heartkaroo.power.MmpDataType
 import com.inqulab.heartkaroo.power.QuadrantAnalysisDataType
+import com.inqulab.heartkaroo.power.RidePowerEngine
 import com.inqulab.heartkaroo.power.TssDataType
 import com.inqulab.heartkaroo.power.VariabilityIndexDataType
+import com.inqulab.heartkaroo.settings.RiderSettings
 import com.inqulab.heartkaroo.hrv.DfaAlpha1DataType
 import com.inqulab.heartkaroo.hrv.HRVDataType
 import com.inqulab.heartkaroo.hrv.HRVStressDataType
@@ -46,6 +48,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
@@ -113,6 +116,9 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
     lateinit var bleManager: PolarBleManager
         private set
 
+    lateinit var ridePowerEngine: RidePowerEngine
+        private set
+
     override val types by lazy {
         listOf(
             DecouplingDataType(this),
@@ -130,11 +136,11 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             CoastingDataType(this),
             QuadrantAnalysisDataType(this),
             VamDataType(this),
-            MmpDataType(this, 5_000L, "mmp_5s"),
-            MmpDataType(this, 60_000L, "mmp_1min"),
-            MmpDataType(this, 5L * 60 * 1000, "mmp_5min"),
-            MmpDataType(this, 20L * 60 * 1000, "mmp_20min"),
-            MmpDataType(this, 60L * 60 * 1000, "mmp_60min"),
+            MmpDataType(this, "mmp_5s"),
+            MmpDataType(this, "mmp_1min"),
+            MmpDataType(this, "mmp_5min"),
+            MmpDataType(this, "mmp_20min"),
+            MmpDataType(this, "mmp_60min"),
             HRVDataType(bleManager, EXTENSION_ID),
             HRVStressDataType(bleManager, EXTENSION_ID),
             DfaAlpha1DataType(bleManager, EXTENSION_ID),
@@ -151,13 +157,22 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
         )
     }
 
-    private val serviceScope = CoroutineScope(Dispatchers.IO)
+    // SupervisorJob so one failing collector (engine stream, battery watch)
+    // doesn't cancel the others.
+    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun onCreate() {
         super.onCreate()
         karooSystem = KarooSystemService(applicationContext)
         bleManager = PolarBleManager(applicationContext)
+        // Owns the per-ride power metrics and feeds them from one long-lived set
+        // of stream collectors, so they accumulate for the whole ride regardless
+        // of which page is on screen (see RidePowerEngine).
+        ridePowerEngine = RidePowerEngine(
+            karooSystem, RiderSettings(applicationContext), serviceScope,
+        )
         karooSystem.connect {}
+        ridePowerEngine.start()
         watchStrapBattery()
     }
 
@@ -243,6 +258,9 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
     }
 
     override fun startFit(emitter: Emitter<FitEffect>) {
+        // A new recording session = a new ride: reset the per-ride power metrics
+        // so best-power, TSS, kJ etc. count this ride, not the previous one.
+        ridePowerEngine.resetRide()
         val scope = CoroutineScope(Dispatchers.IO)
         val rmssdJob: Job = scope.launch {
             bleManager.rmssdFlow
