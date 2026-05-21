@@ -59,6 +59,12 @@ Recorded alongside the standard HR record when the strap is active:
 | `sdnn` | ms |
 | `aet_estimate` | watts |
 
+`respiratory_rate` is also tagged with the native FIT record respiration
+field number (108), so apps that understand it (intervals.icu, Garmin
+Connect) read it as real respiration instead of an opaque custom stream.
+The rest have no native FIT equivalent and appear as named developer
+fields (intervals.icu surfaces them under Custom Streams).
+
 The other secondary HRV metrics (pNN50, SD1/SD2, ectopic rate) are
 derivable post-ride from the recorded RR data, so they stay as
 live-display-only.
