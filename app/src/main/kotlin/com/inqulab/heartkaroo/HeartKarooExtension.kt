@@ -1,9 +1,7 @@
 package com.inqulab.heartkaroo
 
-import com.inqulab.heartkaroo.aet.AerobicThresholdCalibrator
 import com.inqulab.heartkaroo.aet.AerobicThresholdDataType
 import com.inqulab.heartkaroo.aet.AerobicThresholdStore
-import com.inqulab.heartkaroo.cadence.OptimalCadenceCalculator
 import com.inqulab.heartkaroo.cadence.OptimalCadenceDataType
 import com.inqulab.heartkaroo.cadence.OptimalCadenceStore
 import com.inqulab.heartkaroo.climb.VamDataType
@@ -26,7 +24,6 @@ import com.inqulab.heartkaroo.hrv.HRVDataType
 import com.inqulab.heartkaroo.hrv.HRVStressDataType
 import com.inqulab.heartkaroo.hrv.HrvFlowDataType
 import com.inqulab.heartkaroo.hrv.PolarBleManager
-import com.inqulab.heartkaroo.karoo.streamDataFlow
 import com.inqulab.heartkaroo.wprime.WPrimeBalanceDataType
 import io.hammerhead.karooext.KarooSystemService
 import io.hammerhead.karooext.extension.KarooExtension
@@ -42,14 +39,12 @@ import io.hammerhead.karooext.models.FitEffect
 import io.hammerhead.karooext.models.InRideAlert
 import io.hammerhead.karooext.models.OnConnectionStatus
 import io.hammerhead.karooext.models.OnDataPoint
-import io.hammerhead.karooext.models.StreamState
 import io.hammerhead.karooext.models.WriteToRecordMesg
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
@@ -169,7 +164,7 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
         // of stream collectors, so they accumulate for the whole ride regardless
         // of which page is on screen (see RidePowerEngine).
         ridePowerEngine = RidePowerEngine(
-            karooSystem, RiderSettings(applicationContext), serviceScope,
+            karooSystem, RiderSettings(applicationContext), bleManager.dfaAlpha1Flow, serviceScope,
         )
         karooSystem.connect {}
         ridePowerEngine.start()
@@ -297,36 +292,12 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
                     emitter.onNext(WriteToRecordMesg(FieldValue(SDNN_FIELD, sdnn.toDouble())))
                 }
         }
-        val aetCalibrator = AerobicThresholdCalibrator()
-        val aetPowerJob: Job = scope.launch {
-            karooSystem.streamDataFlow(DataType.Type.POWER).collect { ps ->
-                val p = (ps as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull()
-                    ?: return@collect
-                aetCalibrator.addPower(System.currentTimeMillis(), p)
-            }
-        }
-        val aetAlphaJob: Job = scope.launch {
-            bleManager.dfaAlpha1Flow.filterNotNull().collect { a ->
-                aetCalibrator.addAlpha(a)
-                aetCalibrator.currentEstimate()?.let { est ->
-                    emitter.onNext(WriteToRecordMesg(FieldValue(AET_FIELD, est.toDouble())))
-                }
-            }
-        }
-        val cadenceCalc = OptimalCadenceCalculator()
-        val cadenceJob: Job = scope.launch {
-            combine(
-                karooSystem.streamDataFlow(DataType.Type.POWER),
-                karooSystem.streamDataFlow(DataType.Type.HEART_RATE),
-                karooSystem.streamDataFlow(DataType.Type.CADENCE),
-            ) { ps, hs, cs ->
-                Triple(
-                    (ps as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull(),
-                    (hs as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull(),
-                    (cs as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull(),
-                )
-            }.collect { (p, h, c) ->
-                if (p != null && h != null && c != null) cadenceCalc.add(p, h, c)
+        // AeT and optimal cadence accumulate in the engine (so they survive page
+        // switches); mirror the live AeT estimate into the FIT record while
+        // recording, and persist both per-ride finals from the engine on stop.
+        val aetJob: Job = scope.launch {
+            ridePowerEngine.aet.filterNotNull().collect { est ->
+                emitter.onNext(WriteToRecordMesg(FieldValue(AET_FIELD, est.toDouble())))
             }
         }
         emitter.setCancellable {
@@ -335,17 +306,15 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             dfaJob.cancel()
             respJob.cancel()
             sdnnJob.cancel()
-            aetPowerJob.cancel()
-            aetAlphaJob.cancel()
-            cadenceJob.cancel()
-            val final = aetCalibrator.currentEstimate()
-            val samples = aetCalibrator.sampleCount
+            aetJob.cancel()
+            val final = ridePowerEngine.aetCurrentEstimate()
+            val samples = ridePowerEngine.aetSampleCount
             if (final != null && samples >= MIN_AET_SAMPLES_TO_PERSIST) {
                 AerobicThresholdStore(applicationContext)
                     .record(System.currentTimeMillis(), final, samples)
             }
-            val cadenceFinal = cadenceCalc.optimalCadence()
-            val cadenceSamples = cadenceCalc.totalSamples
+            val cadenceFinal = ridePowerEngine.optimalCadenceCurrent()
+            val cadenceSamples = ridePowerEngine.optimalCadenceSamples
             if (cadenceFinal != null && cadenceSamples >= MIN_CADENCE_SAMPLES_TO_PERSIST) {
                 OptimalCadenceStore(applicationContext)
                     .record(System.currentTimeMillis(), cadenceFinal, cadenceSamples)

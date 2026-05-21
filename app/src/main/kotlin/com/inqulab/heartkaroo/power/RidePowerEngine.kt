@@ -1,27 +1,36 @@
 package com.inqulab.heartkaroo.power
 
+import com.inqulab.heartkaroo.aet.AerobicThresholdCalibrator
+import com.inqulab.heartkaroo.cadence.OptimalCadenceCalculator
+import com.inqulab.heartkaroo.climb.VamCalculator
+import com.inqulab.heartkaroo.decoupling.CardiacPopDetector
+import com.inqulab.heartkaroo.decoupling.DecouplingCalculator
 import com.inqulab.heartkaroo.efficiency.CardiacCostCalculator
 import com.inqulab.heartkaroo.efficiency.EfficiencyFactorCalculator
 import com.inqulab.heartkaroo.karoo.streamDataFlow
 import com.inqulab.heartkaroo.settings.RiderSettings
+import com.inqulab.heartkaroo.wprime.WPrimeBalanceCalculator
 import io.hammerhead.karooext.KarooSystemService
 import io.hammerhead.karooext.models.DataType
 import io.hammerhead.karooext.models.StreamState
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 
 /**
- * Single owner of every per-ride power / HR / cadence metric.
+ * Single owner of every per-ride power / HR / cadence / climb metric.
  *
  * The calculators live here, fed by one long-lived set of stream collectors,
  * NOT inside each data field's startStream. A data field is only streamed while
  * its page is visible, and Karoo recreates the stream across lifecycle changes,
  * so a calculator owned by startStream is reset constantly — which means any
- * metric with a warmup (best 5-min power, Efficiency Factor, …) never fills and
- * shows 0 / "Searching" forever. Here the metrics accumulate for the whole ride
+ * metric with a warmup (best 5-min power, Efficiency Factor, AeT, decoupling, …)
+ * never fills and shows 0 / "Searching" forever, and cumulative ones (kJ, W′
+ * balance) reset mid-ride. Here the metrics accumulate for the whole ride
  * regardless of what's on screen; each data field just collects the matching
  * StateFlow (null -> Searching, value -> Streaming). Reset per ride via
  * [resetRide].
@@ -29,6 +38,7 @@ import kotlinx.coroutines.launch
 class RidePowerEngine(
     private val karooSystem: KarooSystemService,
     private val settings: RiderSettings,
+    private val dfaAlpha1: Flow<Float?>,
     private val scope: CoroutineScope,
 ) {
     private val mmpDurations = linkedMapOf(
@@ -46,8 +56,17 @@ class RidePowerEngine(
     private val coastingCalc = CoastingCalculator()
     private val efCalc = EfficiencyFactorCalculator()
     private val ccCalc = CardiacCostCalculator()
-    // FTP only feeds the quadrant split lines at construction; rebuilt on reset.
+    private val pwHrDecoupling = DecouplingCalculator()
+    private val paHrDecouplingCalc = DecouplingCalculator()
+    private val popDecoupling = DecouplingCalculator()
+    private val popDetector = CardiacPopDetector()
+    private val vamCalc = VamCalculator()
+    private val aetCalc = AerobicThresholdCalibrator()
+    private val cadenceCalc = OptimalCadenceCalculator()
+    // FTP / CP / W′₀ feed split lines or the model at construction; rebuilt on
+    // reset so a change in the Settings screen takes effect on the next ride.
     private var quadrantCalc = QuadrantAnalysisCalculator(ftpW = settings.ftpW.toDouble())
+    private var wPrimeCalc = newWPrimeCalc()
     private val mmpCalcs = mmpDurations.mapValues { (_, d) -> MmpCalculator(d) }
 
     private val _intensityFactor = MutableStateFlow<Float?>(null)
@@ -66,6 +85,20 @@ class RidePowerEngine(
     val efficiencyFactor: StateFlow<Float?> = _efficiencyFactor.asStateFlow()
     private val _cardiacCost = MutableStateFlow<Float?>(null)
     val cardiacCost: StateFlow<Float?> = _cardiacCost.asStateFlow()
+    private val _decoupling = MutableStateFlow<Float?>(null)
+    val decoupling: StateFlow<Float?> = _decoupling.asStateFlow()
+    private val _paHrDecoupling = MutableStateFlow<Float?>(null)
+    val paHrDecoupling: StateFlow<Float?> = _paHrDecoupling.asStateFlow()
+    private val _cardiacPop = MutableStateFlow<Float?>(null)
+    val cardiacPop: StateFlow<Float?> = _cardiacPop.asStateFlow()
+    private val _wPrimeBalance = MutableStateFlow<Float?>(null)
+    val wPrimeBalance: StateFlow<Float?> = _wPrimeBalance.asStateFlow()
+    private val _vam = MutableStateFlow<Float?>(null)
+    val vam: StateFlow<Float?> = _vam.asStateFlow()
+    private val _aet = MutableStateFlow<Float?>(null)
+    val aet: StateFlow<Float?> = _aet.asStateFlow()
+    private val _optimalCadence = MutableStateFlow<Float?>(null)
+    val optimalCadence: StateFlow<Float?> = _optimalCadence.asStateFlow()
     private val _mmp = mmpDurations.keys.associateWith { MutableStateFlow<Float?>(null) }
 
     fun mmpFlow(typeId: String): StateFlow<Float?> = _mmp.getValue(typeId).asStateFlow()
@@ -93,11 +126,30 @@ class RidePowerEngine(
                 onPower(System.currentTimeMillis(), p)
             }
         }
+        scope.launch {
+            karooSystem.streamDataFlow(DataType.Type.SPEED).collect { ss ->
+                val s = ss.singleValue() ?: return@collect
+                onSpeed(System.currentTimeMillis(), s)
+            }
+        }
+        scope.launch {
+            karooSystem.streamDataFlow(DataType.Type.ELEVATION_GAIN).collect { es ->
+                val e = es.singleValue() ?: return@collect
+                _vam.value = vamCalc.add(System.currentTimeMillis(), e)
+            }
+        }
+        scope.launch {
+            dfaAlpha1.filterNotNull().collect { a ->
+                aetCalc.addAlpha(a)
+                _aet.value = aetCalc.currentEstimate()
+            }
+        }
     }
 
     @Synchronized
     private fun onPower(now: Long, power: Double) {
         val ftp = settings.ftpW.coerceAtLeast(1)
+        val hr = latestHr
 
         npCalc.add(now, power)
         val np = npCalc.normalizedPower()
@@ -117,19 +169,51 @@ class RidePowerEngine(
 
         _kilojoules.value = kjCalc.add(now, power)
         _coasting.value = coastingCalc.add(now, power)
+        _wPrimeBalance.value = wPrimeCalc.add(now, power)
 
         for ((id, calc) in mmpCalcs) _mmp.getValue(id).value = calc.add(now, power)
 
-        val hr = latestHr
         if (hr != null && hr > 0.0) {
             _efficiencyFactor.value = efCalc.add(now, power, hr)
             _cardiacCost.value = ccCalc.add(now, power, hr)
+            _decoupling.value = pwHrDecoupling.add(now, power, hr)?.toFloat()
+            val popPct = popDecoupling.add(now, power, hr)
+            popDetector.add(now, popPct)
+        } else {
+            _decoupling.value = pwHrDecoupling.current()?.toFloat()
+            popDetector.add(now, popDecoupling.current())
         }
+        _cardiacPop.value = popDetector.getPopMinutes()
+
+        aetCalc.addPower(now, power)
+        _aet.value = aetCalc.currentEstimate()
 
         val cad = latestCadence
-        if (cad != null && cad > 0.0) quadrantCalc.add(now, power, cad)
+        if (cad != null && cad > 0.0) {
+            quadrantCalc.add(now, power, cad)
+            if (hr != null && hr > 0.0) cadenceCalc.add(power, hr, cad)
+        }
         _quadrant.value = quadrantCalc.dominantQuadrant()?.toFloat()
+        _optimalCadence.value = cadenceCalc.optimalCadence()
     }
+
+    @Synchronized
+    private fun onSpeed(now: Long, speedMps: Double) {
+        val hr = latestHr
+        _paHrDecoupling.value = if (hr != null && hr > 0.0) {
+            paHrDecouplingCalc.add(now, speedMps, hr)?.toFloat()
+        } else {
+            paHrDecouplingCalc.current()?.toFloat()
+        }
+    }
+
+    /** AeT estimate / sample count for per-ride persistence (read at ride stop). */
+    fun aetCurrentEstimate(): Float? = aetCalc.currentEstimate()
+    val aetSampleCount: Int get() = aetCalc.sampleCount
+
+    /** Optimal cadence / sample count for per-ride persistence (read at ride stop). */
+    fun optimalCadenceCurrent(): Float? = cadenceCalc.optimalCadence()
+    val optimalCadenceSamples: Int get() = cadenceCalc.totalSamples
 
     /** Reset every per-ride accumulator. Call when a new ride starts. */
     @Synchronized
@@ -140,7 +224,15 @@ class RidePowerEngine(
         coastingCalc.reset()
         efCalc.reset()
         ccCalc.reset()
+        pwHrDecoupling.reset()
+        paHrDecouplingCalc.reset()
+        popDecoupling.reset()
+        popDetector.reset()
+        vamCalc.reset()
+        aetCalc.reset()
+        cadenceCalc.reset()
         quadrantCalc = QuadrantAnalysisCalculator(ftpW = settings.ftpW.toDouble())
+        wPrimeCalc = newWPrimeCalc()
         mmpCalcs.values.forEach { it.reset() }
 
         _intensityFactor.value = null
@@ -151,8 +243,20 @@ class RidePowerEngine(
         _quadrant.value = null
         _efficiencyFactor.value = null
         _cardiacCost.value = null
+        _decoupling.value = null
+        _paHrDecoupling.value = null
+        _cardiacPop.value = null
+        _wPrimeBalance.value = null
+        _vam.value = null
+        _aet.value = null
+        _optimalCadence.value = null
         _mmp.values.forEach { it.value = null }
     }
+
+    private fun newWPrimeCalc() = WPrimeBalanceCalculator(
+        criticalPowerW = settings.criticalPowerW.toDouble(),
+        wPrimeJ = settings.wPrimeJ.toDouble(),
+    )
 
     private fun StreamState.singleValue(): Double? =
         (this as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull()
