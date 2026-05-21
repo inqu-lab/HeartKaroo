@@ -82,6 +82,10 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             fitBaseTypeId = 136,
             fieldName = "respiratory_rate",
             units = "brpm",
+            // Map onto the native FIT record respiration_rate field (108) so
+            // readers (intervals.icu, Garmin Connect) treat it as real
+            // respiration rather than an opaque custom stream.
+            nativeFieldNum = 108,
         )
 
         val SDNN_FIELD = DeveloperField(
