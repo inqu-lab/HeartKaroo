@@ -50,17 +50,18 @@ class HrvFlowHoldTest {
     }
 
     @Test
-    fun `connected but no value yet is Idle not Searching`() = runTest {
+    fun `connected but no value yet shows Searching not a bare zero`() = runTest {
         val source = MutableStateFlow<Float?>(null)
         val connected = MutableStateFlow(true)
         val emitter = RecordingEmitter()
         streamFloatWithHold(source, connected, "x", emitter, holdMs = 8_000L, scope = backgroundScope)
         advanceTimeBy(100)
-        assertEquals(StreamState.Idle, emitter.last())
+        // Warming up (e.g. DFA α1 needs ~2 min) must not read as "0".
+        assertEquals(StreamState.Searching, emitter.last())
     }
 
     @Test
-    fun `brief gap holds last value then goes Idle`() = runTest {
+    fun `brief gap holds last value then goes Searching`() = runTest {
         val source = MutableStateFlow<Float?>(null)
         val connected = MutableStateFlow(true)
         val emitter = RecordingEmitter()
@@ -73,7 +74,7 @@ class HrvFlowHoldTest {
         assertTrue("should hold the last value", emitter.last() is StreamState.Streaming)
         assertEquals(55.0, emitter.last().value(), 1e-6)
         advanceTimeBy(8_000) // past the hold window
-        assertEquals(StreamState.Idle, emitter.last())
+        assertEquals(StreamState.Searching, emitter.last())
     }
 
     @Test
