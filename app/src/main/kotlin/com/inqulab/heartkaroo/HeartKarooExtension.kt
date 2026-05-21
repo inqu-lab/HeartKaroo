@@ -275,8 +275,11 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
 
     override fun startFit(emitter: Emitter<FitEffect>) {
         // A new recording session = a new ride: reset the per-ride power metrics
-        // so best-power, TSS, kJ etc. count this ride, not the previous one.
+        // so best-power, TSS, kJ etc. count this ride, not the previous one. Same
+        // for DFA α1 — its long window otherwise shows a stale pre-ride value the
+        // instant recording starts; reset it so it warms up fresh for this ride.
         ridePowerEngine.resetRide()
+        bleManager.resetDfaAlpha1()
         val scope = CoroutineScope(Dispatchers.IO)
         val rmssdJob: Job = scope.launch {
             bleManager.rmssdFlow

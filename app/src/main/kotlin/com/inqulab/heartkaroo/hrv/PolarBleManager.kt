@@ -288,6 +288,18 @@ class PolarBleManager private constructor(private val context: Context) {
         resetHrvCalculators()
     }
 
+    /** Reset the DFA α1 window so it warms up fresh for a new ride. The manager
+     *  is process-scoped and the strap stays connected between rides, so α1's long
+     *  (~2 min / up to 480-beat) window would otherwise carry pre-ride data and
+     *  show a stale value the instant recording starts. Call at ride start. The
+     *  short-window metrics (RMSSD, SDNN, …) self-refresh in seconds and are left
+     *  live. */
+    @Synchronized
+    fun resetDfaAlpha1() {
+        dfaCalculator.reset()
+        _dfaAlpha1Flow.value = null
+    }
+
     // The SDK identifies the device in callbacks by its Polar device id
     // (e.g. "B36B5B2C"), NOT the BT MAC we connect with, so we don't match on the
     // MAC here. Only one strap is connected at a time.
