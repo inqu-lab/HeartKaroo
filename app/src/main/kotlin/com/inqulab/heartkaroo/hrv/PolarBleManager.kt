@@ -29,11 +29,14 @@ import java.util.Collections
  *    intermediate beats between notifications)
  *
  * The BLE link is owned by the manager and lives independently of any flow
- * collector: it is opened with [ensureConnected]/[connect] and only dropped by
- * [disconnect] (on real teardown), so a strap stays connected even as Karoo
- * recreates the connectDevice emitter — e.g. when a ride starts.
+ * collector: it is opened with [ensureConnected]/[connect] and stays up for the
+ * life of the process, so a strap stays connected even as Karoo tears down and
+ * recreates the service (e.g. when a ride starts). The manager is a process-wide
+ * singleton ([getInstance]) shared by the extension service and the Readiness
+ * screen, so there is exactly one strap link — switched via [ensureConnected],
+ * never dropped on a service/Activity teardown.
  */
-class PolarBleManager(private val context: Context) {
+class PolarBleManager private constructor(private val context: Context) {
 
     sealed class BleEvent {
         object Connected : BleEvent()
@@ -44,7 +47,16 @@ class PolarBleManager(private val context: Context) {
     /** A strap found during [startDeviceScan]. [id] is the BT MAC address. */
     data class DiscoveredDevice(val id: String, val name: String)
 
-    private val api: PolarBleApi by lazy { sharedApi(context) }
+    private val api: PolarBleApi by lazy {
+        PolarBleApiDefaultImpl.defaultImplementation(
+            context.applicationContext,
+            setOf(
+                PolarBleApi.PolarBleSdkFeature.FEATURE_HR,
+                PolarBleApi.PolarBleSdkFeature.FEATURE_BATTERY_INFO,
+                PolarBleApi.PolarBleSdkFeature.FEATURE_DEVICE_INFO,
+            ),
+        ).apply { setAutomaticReconnection(true) }
+    }
 
     companion object {
         // After a gap longer than this, the retained HRV windows are stale and
@@ -56,22 +68,18 @@ class PolarBleManager(private val context: Context) {
         // artifacts — past a few percent the exponent is no longer trustworthy.
         private const val MAX_ALPHA1_ARTIFACT_RATE = 0.05
 
-        // A single Polar BLE stack for the whole process. The extension service
-        // and the Readiness screen each hold a PolarBleManager; without this they
-        // would spin up two BLE stacks that fight over the radio and cause drops.
+        // One manager — and therefore one Polar BLE stack and one strap link —
+        // for the whole process. The extension service and the Readiness screen
+        // share it so the strap stays connected as the service is torn down and
+        // recreated (notably at ride start) instead of being dropped and
+        // reconnected. Two separate managers used to fight over the radio and the
+        // shared SDK callback, and a service teardown would disconnect the strap.
         @Volatile
-        private var sharedApiInstance: PolarBleApi? = null
+        private var instance: PolarBleManager? = null
 
-        private fun sharedApi(context: Context): PolarBleApi =
-            sharedApiInstance ?: synchronized(this) {
-                sharedApiInstance ?: PolarBleApiDefaultImpl.defaultImplementation(
-                    context.applicationContext,
-                    setOf(
-                        PolarBleApi.PolarBleSdkFeature.FEATURE_HR,
-                        PolarBleApi.PolarBleSdkFeature.FEATURE_BATTERY_INFO,
-                        PolarBleApi.PolarBleSdkFeature.FEATURE_DEVICE_INFO,
-                    ),
-                ).apply { setAutomaticReconnection(true) }.also { sharedApiInstance = it }
+        fun getInstance(context: Context): PolarBleManager =
+            instance ?: synchronized(this) {
+                instance ?: PolarBleManager(context.applicationContext).also { instance = it }
             }
     }
 
@@ -242,8 +250,10 @@ class PolarBleManager(private val context: Context) {
         runCatching { api.connectToDevice(macAddress) }
     }
 
-    /** Drop the BLE link and reset HRV state. Call on real teardown (service
-     *  onDestroy, Readiness screen close) — never on a transient emitter cancel. */
+    /** Drop the BLE link and reset HRV state. Intentionally NOT called on a
+     *  service or Activity teardown — the link is process-scoped and must outlive
+     *  them (a ride start recreates the service). Reserved for a deliberate full
+     *  teardown; routine strap switching goes through [ensureConnected]. */
     @Synchronized
     fun disconnect() {
         hrDisposable?.dispose()

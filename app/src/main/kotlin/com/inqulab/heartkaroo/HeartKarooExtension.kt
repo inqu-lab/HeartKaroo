@@ -39,7 +39,6 @@ import io.hammerhead.karooext.models.FitEffect
 import io.hammerhead.karooext.models.InRideAlert
 import io.hammerhead.karooext.models.OnConnectionStatus
 import io.hammerhead.karooext.models.OnDataPoint
-import io.hammerhead.karooext.models.ReleaseBluetooth
 import io.hammerhead.karooext.models.RequestBluetooth
 import io.hammerhead.karooext.models.WriteToRecordMesg
 import kotlinx.coroutines.CoroutineScope
@@ -55,6 +54,12 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
 
     companion object {
         const val EXTENSION_ID = "heartkaroo"
+
+        // Reserve the BT radio once per process. Re-requesting on every service
+        // recreate (e.g. at ride start) risks cycling the radio and dropping the
+        // strap, and we never release it — the reservation lives with the process.
+        @Volatile
+        private var bluetoothRequested = false
 
         val RMSSD_FIELD = DeveloperField(
             fieldDefinitionNumber = 0,
@@ -161,7 +166,7 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
     override fun onCreate() {
         super.onCreate()
         karooSystem = KarooSystemService(applicationContext)
-        bleManager = PolarBleManager(applicationContext)
+        bleManager = PolarBleManager.getInstance(applicationContext)
         // Owns the per-ride power metrics and feeds them from one long-lived set
         // of stream collectors, so they accumulate for the whole ride regardless
         // of which page is on screen (see RidePowerEngine).
@@ -170,11 +175,13 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
         )
         // We run our own BLE stack (Polar SDK) for the strap. Tell Karoo we're
         // using the radio so the system coordinates with us instead of reclaiming
-        // it when a ride starts — which was dropping the strap. Released in
-        // onDestroy. (The connect callback can fire again on reconnect; the same
-        // resourceId makes a repeat request a no-op.)
+        // it when a ride starts. Requested once per process (see flag) and never
+        // released, so a service recreate doesn't cycle the radio.
         karooSystem.connect { connected ->
-            if (connected) karooSystem.dispatch(RequestBluetooth(EXTENSION_ID))
+            if (connected && !bluetoothRequested) {
+                bluetoothRequested = true
+                karooSystem.dispatch(RequestBluetooth(EXTENSION_ID))
+            }
         }
         ridePowerEngine.start()
         watchStrapBattery()
@@ -332,9 +339,12 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
     }
 
     override fun onDestroy() {
+        // Deliberately do NOT disconnect the strap or release BT here: Karoo
+        // recreates the service at ride start, and dropping the link (status=22
+        // local teardown) then auto-reconnecting was the ~4 s "Searching" gap.
+        // The strap link is process-scoped (PolarBleManager singleton) and the
+        // SDK keeps it alive across the recreate.
         serviceScope.cancel()
-        runCatching { karooSystem.dispatch(ReleaseBluetooth(EXTENSION_ID)) }
-        bleManager.disconnect()
         karooSystem.disconnect()
         super.onDestroy()
     }
