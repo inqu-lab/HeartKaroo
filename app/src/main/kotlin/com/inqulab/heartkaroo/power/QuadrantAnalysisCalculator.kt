@@ -27,6 +27,9 @@ class QuadrantAnalysisCalculator(
 
     private val window = ArrayDeque<Sample>()
 
+    // Whole-ride cumulative tally (index 1..4), for the per-ride distribution.
+    private val cumulative = IntArray(5)
+
     /** Reference FP at FTP & 90 rpm. */
     private val refFp: Double
         get() {
@@ -52,8 +55,20 @@ class QuadrantAnalysisCalculator(
             else -> 4
         }
         window.addLast(Sample(timeMs, q))
+        cumulative[q]++
         val cutoff = timeMs - windowMs
         while (window.isNotEmpty() && window.first().timeMs < cutoff) window.removeFirst()
+    }
+
+    /**
+     * Whole-ride share of time in each quadrant as percentages
+     * [Q1, Q2, Q3, Q4], or null before any sample lands.
+     */
+    @Synchronized
+    fun distributionPercent(): DoubleArray? {
+        val total = cumulative.sum()
+        if (total == 0) return null
+        return DoubleArray(4) { i -> cumulative[i + 1] * 100.0 / total }
     }
 
     @Synchronized
@@ -68,5 +83,5 @@ class QuadrantAnalysisCalculator(
     }
 
     @Synchronized
-    fun reset() { window.clear() }
+    fun reset() { window.clear(); cumulative.fill(0) }
 }

@@ -55,7 +55,15 @@ class AerobicThresholdCalibrator(
     }
 
     @Synchronized
-    fun currentEstimate(): Float? {
+    fun currentEstimate(): Float? = estimateForTarget(alphaTarget)
+
+    /**
+     * Power at which the α1-vs-power fit crosses [target]. Reuses the same
+     * regression as [currentEstimate] so other thresholds (e.g. α1 = 0.50
+     * for VT2 / the second ventilatory threshold) come for free.
+     */
+    @Synchronized
+    fun estimateForTarget(target: Double): Float? {
         if (paired.size < minSamples) return null
         var sumX = 0.0; var sumY = 0.0; var sumXY = 0.0; var sumXX = 0.0
         for (s in paired) {
@@ -68,9 +76,9 @@ class AerobicThresholdCalibrator(
         val slope = (n * sumXY - sumX * sumY) / denom
         if (!slope.isFinite() || slope >= 0.0) return null
         val intercept = (sumY - slope * sumX) / n
-        val aetPower = (alphaTarget - intercept) / slope
-        if (!aetPower.isFinite() || aetPower <= 0.0) return null
-        return aetPower.toFloat()
+        val power = (target - intercept) / slope
+        if (!power.isFinite() || power <= 0.0) return null
+        return power.toFloat()
     }
 
     val sampleCount: Int

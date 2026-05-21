@@ -76,9 +76,20 @@ fields in intervals.icu) rather than 1 Hz streams:
 
 | FIT field | Units | Meaning |
 |---|---|---|
-| `aet_estimate` | watts | Final aerobic-threshold estimate for the ride. |
+| `aet_estimate` | watts | Final aerobic-threshold estimate (DFA α1 = 0.75). |
+| `vt2_estimate` | watts | Second-threshold estimate from the same fit (DFA α1 = 0.50). |
 | `optimal_cadence` | rpm | Best-efficiency cadence (highest W per beat). |
 | `w_prime_min` | J | Lowest W′ balance reached — depth into anaerobic reserve. |
+| `matches_burned` | — | Count of fresh dips below 25% W′ (re-armed above 30%). |
+| `dfa_a1_aerobic_s` | s | Time with DFA α1 ≥ 0.75 (below LT1). |
+| `dfa_a1_threshold_s` | s | Time with 0.50 ≤ DFA α1 &lt; 0.75 (between LT1 and LT2). |
+| `dfa_a1_hard_s` | s | Time with DFA α1 &lt; 0.50 (above LT2). |
+| `cardiac_pop_min` | min | Minute at which Pw:Hr decoupling first sustained above 5%. |
+| `quadrant1_pct` … `quadrant4_pct` | pct | Share of ride time in each Coggan quadrant. |
+
+These are written periodically to the session message (latest value
+wins), so they need power/HR/cadence and an active strap to populate;
+fields without enough data are simply absent.
 
 The other secondary HRV metrics (pNN50, SD1/SD2, ectopic rate) are
 derivable post-ride from the recorded RR data, so they stay as

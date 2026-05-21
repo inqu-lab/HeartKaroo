@@ -8,6 +8,8 @@ import com.inqulab.heartkaroo.cadence.OptimalCadenceDataType
 import com.inqulab.heartkaroo.cadence.OptimalCadenceStore
 import com.inqulab.heartkaroo.climb.VamDataType
 import com.inqulab.heartkaroo.decoupling.CardiacPopDataType
+import com.inqulab.heartkaroo.decoupling.CardiacPopDetector
+import com.inqulab.heartkaroo.decoupling.DecouplingCalculator
 import com.inqulab.heartkaroo.decoupling.DecouplingDataType
 import com.inqulab.heartkaroo.decoupling.PaHrDecouplingDataType
 import com.inqulab.heartkaroo.efficiency.CardiacCostDataType
@@ -16,10 +18,12 @@ import com.inqulab.heartkaroo.power.CoastingDataType
 import com.inqulab.heartkaroo.power.IntensityFactorDataType
 import com.inqulab.heartkaroo.power.KilojoulesDataType
 import com.inqulab.heartkaroo.power.MmpDataType
+import com.inqulab.heartkaroo.power.QuadrantAnalysisCalculator
 import com.inqulab.heartkaroo.power.QuadrantAnalysisDataType
 import com.inqulab.heartkaroo.power.TssDataType
 import com.inqulab.heartkaroo.power.VariabilityIndexDataType
 import com.inqulab.heartkaroo.hrv.DfaAlpha1DataType
+import com.inqulab.heartkaroo.hrv.DfaAlphaZoneTimer
 import com.inqulab.heartkaroo.hrv.HRVDataType
 import com.inqulab.heartkaroo.hrv.HRVStressDataType
 import com.inqulab.heartkaroo.hrv.HrvFlowDataType
@@ -48,6 +52,8 @@ import io.hammerhead.karooext.models.WriteToSessionMesg
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filter
@@ -124,8 +130,82 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             units = "J",
         )
 
+        val VT2_FIELD = DeveloperField(
+            fieldDefinitionNumber = 8,
+            fitBaseTypeId = 136,
+            fieldName = "vt2_estimate",
+            units = "watts",
+        )
+
+        val DFA_A1_AEROBIC_FIELD = DeveloperField(
+            fieldDefinitionNumber = 9,
+            fitBaseTypeId = 136,
+            fieldName = "dfa_a1_aerobic_s",
+            units = "s",
+        )
+
+        val DFA_A1_THRESHOLD_FIELD = DeveloperField(
+            fieldDefinitionNumber = 10,
+            fitBaseTypeId = 136,
+            fieldName = "dfa_a1_threshold_s",
+            units = "s",
+        )
+
+        val DFA_A1_HARD_FIELD = DeveloperField(
+            fieldDefinitionNumber = 11,
+            fitBaseTypeId = 136,
+            fieldName = "dfa_a1_hard_s",
+            units = "s",
+        )
+
+        val CARDIAC_POP_FIELD = DeveloperField(
+            fieldDefinitionNumber = 12,
+            fitBaseTypeId = 136,
+            fieldName = "cardiac_pop_min",
+            units = "min",
+        )
+
+        val MATCHES_BURNED_FIELD = DeveloperField(
+            fieldDefinitionNumber = 13,
+            fitBaseTypeId = 136,
+            fieldName = "matches_burned",
+            units = "",
+        )
+
+        val QUADRANT1_FIELD = DeveloperField(
+            fieldDefinitionNumber = 14,
+            fitBaseTypeId = 136,
+            fieldName = "quadrant1_pct",
+            units = "pct",
+        )
+
+        val QUADRANT2_FIELD = DeveloperField(
+            fieldDefinitionNumber = 15,
+            fitBaseTypeId = 136,
+            fieldName = "quadrant2_pct",
+            units = "pct",
+        )
+
+        val QUADRANT3_FIELD = DeveloperField(
+            fieldDefinitionNumber = 16,
+            fitBaseTypeId = 136,
+            fieldName = "quadrant3_pct",
+            units = "pct",
+        )
+
+        val QUADRANT4_FIELD = DeveloperField(
+            fieldDefinitionNumber = 17,
+            fitBaseTypeId = 136,
+            fieldName = "quadrant4_pct",
+            units = "pct",
+        )
+
         private const val MIN_AET_SAMPLES_TO_PERSIST = 60
         private const val MIN_CADENCE_SAMPLES_TO_PERSIST = 300
+
+        // How often the after-ride session summaries are (re)written; the
+        // last write before the ride ends supplies the final values.
+        private const val SESSION_SUMMARY_INTERVAL_MS = 15_000L
 
         // Warn at/below this strap battery %, re-arming once it recovers above
         // the second threshold (so we don't alert repeatedly around the line).
@@ -289,6 +369,7 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
                     emitter.onNext(WriteToRecordMesg(FieldValue(SDNN_FIELD, sdnn.toDouble())))
                 }
         }
+        val settings = RiderSettings(applicationContext)
         val aetCalibrator = AerobicThresholdCalibrator()
         val aetPowerJob: Job = scope.launch {
             karooSystem.streamDataFlow(DataType.Type.POWER).collect { ps ->
@@ -297,22 +378,18 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
                 aetCalibrator.addPower(System.currentTimeMillis(), p)
             }
         }
-        var lastAetSession: Double? = null
+        val dfaZones = DfaAlphaZoneTimer()
         val aetAlphaJob: Job = scope.launch {
             bleManager.dfaAlpha1Flow.filterNotNull().collect { a ->
                 aetCalibrator.addAlpha(a)
+                dfaZones.add(System.currentTimeMillis(), a.toDouble())
                 aetCalibrator.currentEstimate()?.let { est ->
-                    val v = est.toDouble()
-                    emitter.onNext(WriteToRecordMesg(FieldValue(AET_FIELD, v)))
-                    if (v != lastAetSession) {
-                        lastAetSession = v
-                        emitter.onNext(WriteToSessionMesg(FieldValue(AET_FIELD, v)))
-                    }
+                    emitter.onNext(WriteToRecordMesg(FieldValue(AET_FIELD, est.toDouble())))
                 }
             }
         }
         val cadenceCalc = OptimalCadenceCalculator()
-        var lastCadenceSession: Double? = null
+        val quadrantCalc = QuadrantAnalysisCalculator(ftpW = settings.ftpW.toDouble())
         val cadenceJob: Job = scope.launch {
             combine(
                 karooSystem.streamDataFlow(DataType.Type.POWER),
@@ -325,32 +402,84 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
                     (cs as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull(),
                 )
             }.collect { (p, h, c) ->
-                if (p != null && h != null && c != null) {
-                    cadenceCalc.add(p, h, c)
-                    cadenceCalc.optimalCadence()?.let { rpm ->
-                        val v = rpm.toDouble()
-                        if (v != lastCadenceSession) {
-                            lastCadenceSession = v
-                            emitter.onNext(WriteToSessionMesg(FieldValue(OPTIMAL_CADENCE_FIELD, v)))
-                        }
-                    }
-                }
+                val now = System.currentTimeMillis()
+                if (p != null && c != null) quadrantCalc.add(now, p, c)
+                if (p != null && h != null && c != null) cadenceCalc.add(p, h, c)
             }
         }
-        val wPrimeSettings = RiderSettings(applicationContext)
         val wPrimeCalc = WPrimeBalanceCalculator(
-            criticalPowerW = wPrimeSettings.criticalPowerW.toDouble(),
-            wPrimeJ = wPrimeSettings.wPrimeJ.toDouble(),
+            criticalPowerW = settings.criticalPowerW.toDouble(),
+            wPrimeJ = settings.wPrimeJ.toDouble(),
         )
+        // A "match" is each fresh dip below 25% W′, re-armed only once it has
+        // recovered above 30% so flicker around the line doesn't double-count.
+        val matchThreshold = settings.wPrimeJ * 0.25
+        val matchRearm = settings.wPrimeJ * 0.30
         var wPrimeMin = Double.POSITIVE_INFINITY
-        val wPrimeMinJob: Job = scope.launch {
+        var matchesBurned = 0
+        var matchArmed = true
+        val wPrimeJob: Job = scope.launch {
             karooSystem.streamDataFlow(DataType.Type.POWER).collect { ps ->
                 val p = (ps as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull()
                     ?: return@collect
                 val bal = wPrimeCalc.add(System.currentTimeMillis(), p).toDouble()
-                if (bal < wPrimeMin) {
-                    wPrimeMin = bal
+                if (bal < wPrimeMin) wPrimeMin = bal
+                if (matchArmed && bal < matchThreshold) {
+                    matchesBurned++
+                    matchArmed = false
+                } else if (!matchArmed && bal >= matchRearm) {
+                    matchArmed = true
+                }
+            }
+        }
+        val decouplingCalc = DecouplingCalculator()
+        val popDetector = CardiacPopDetector()
+        val cardiacPopJob: Job = scope.launch {
+            combine(
+                karooSystem.streamDataFlow(DataType.Type.POWER),
+                karooSystem.streamDataFlow(DataType.Type.HEART_RATE),
+            ) { ps, hs ->
+                Pair(
+                    (ps as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull(),
+                    (hs as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull(),
+                )
+            }.collect { (p, h) ->
+                val now = System.currentTimeMillis()
+                val pct = if (p != null && h != null) decouplingCalc.add(now, p, h)
+                else decouplingCalc.current()
+                popDetector.add(now, pct)
+            }
+        }
+        // Single periodic writer for the after-ride session summaries.
+        // WriteToSessionMesg keeps the latest value, so the final tick before
+        // the ride ends carries the ride's summary numbers.
+        val summaryJob: Job = scope.launch {
+            while (isActive) {
+                delay(SESSION_SUMMARY_INTERVAL_MS)
+                aetCalibrator.currentEstimate()?.let {
+                    emitter.onNext(WriteToSessionMesg(FieldValue(AET_FIELD, it.toDouble())))
+                }
+                aetCalibrator.estimateForTarget(0.50)?.let {
+                    emitter.onNext(WriteToSessionMesg(FieldValue(VT2_FIELD, it.toDouble())))
+                }
+                cadenceCalc.optimalCadence()?.let {
+                    emitter.onNext(WriteToSessionMesg(FieldValue(OPTIMAL_CADENCE_FIELD, it.toDouble())))
+                }
+                if (wPrimeMin.isFinite()) {
                     emitter.onNext(WriteToSessionMesg(FieldValue(WPRIME_MIN_FIELD, wPrimeMin)))
+                    emitter.onNext(WriteToSessionMesg(FieldValue(MATCHES_BURNED_FIELD, matchesBurned.toDouble())))
+                }
+                emitter.onNext(WriteToSessionMesg(FieldValue(DFA_A1_AEROBIC_FIELD, dfaZones.aerobicSeconds())))
+                emitter.onNext(WriteToSessionMesg(FieldValue(DFA_A1_THRESHOLD_FIELD, dfaZones.thresholdSeconds())))
+                emitter.onNext(WriteToSessionMesg(FieldValue(DFA_A1_HARD_FIELD, dfaZones.hardSeconds())))
+                popDetector.getPopMinutes()?.let {
+                    emitter.onNext(WriteToSessionMesg(FieldValue(CARDIAC_POP_FIELD, it.toDouble())))
+                }
+                quadrantCalc.distributionPercent()?.let { d ->
+                    emitter.onNext(WriteToSessionMesg(FieldValue(QUADRANT1_FIELD, d[0])))
+                    emitter.onNext(WriteToSessionMesg(FieldValue(QUADRANT2_FIELD, d[1])))
+                    emitter.onNext(WriteToSessionMesg(FieldValue(QUADRANT3_FIELD, d[2])))
+                    emitter.onNext(WriteToSessionMesg(FieldValue(QUADRANT4_FIELD, d[3])))
                 }
             }
         }
@@ -363,7 +492,9 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             aetPowerJob.cancel()
             aetAlphaJob.cancel()
             cadenceJob.cancel()
-            wPrimeMinJob.cancel()
+            wPrimeJob.cancel()
+            cardiacPopJob.cancel()
+            summaryJob.cancel()
             val final = aetCalibrator.currentEstimate()
             val samples = aetCalibrator.sampleCount
             if (final != null && samples >= MIN_AET_SAMPLES_TO_PERSIST) {
