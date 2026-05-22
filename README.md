@@ -59,6 +59,12 @@ Recorded alongside the standard HR record when the strap is active:
 | `sdnn` | ms |
 | `aet_estimate` | watts |
 
+`respiratory_rate` is also tagged with the native FIT record respiration
+field number (108), so apps that understand it (intervals.icu, Garmin
+Connect) read it as real respiration instead of an opaque custom stream.
+The rest have no native FIT equivalent and appear as named developer
+fields (intervals.icu surfaces them under Custom Streams).
+
 The other secondary HRV metrics (pNN50, SD1/SD2, ectopic rate) are
 derivable post-ride from the recorded RR data, so they stay as
 live-display-only.
@@ -164,21 +170,20 @@ exercise the real persistence: record/read round-trips, the 7- and
 90-day window eviction, input validation, defaults, and tolerance of
 malformed stored values.
 
-The derived power fields with no separate calculator (`PowerMetrics` —
-Variability Index, Intensity Factor, TSS) and the shared stream-wiring
-helpers (`collectStreamMetric` / `2` / `3` and `collectAetEstimate`) have
-their own unit tests, as do the strap low-battery alert hysteresis
-(`StrapBatteryAlerter`) and the ride-stop persistence gate
+`RidePowerEngine` — the single owner of every per-ride power/HR/cadence/
+climb metric — is unit-tested by driving its `onPower` / `onSpeed` /
+`onElevation` / `onAlpha` handlers directly and asserting the resulting
+`StateFlow` values (NP-derived IF/VI/TSS, kJ, coasting, W′, MMP, EF,
+cardiac cost, decoupling, quadrant, optimal cadence, VAM, AeT), plus the
+per-ride `resetRide`. The pure ratio formulas it uses live in
+`PowerMetrics` with their own tests, as do the strap low-battery alert
+hysteresis (`StrapBatteryAlerter`) and the ride-stop persistence gate
 (`shouldPersistRollingFinal`).
 
-The data fields take their input flows (and the coroutine dispatcher) as
-constructor parameters, so each `DataType` is unit-tested by feeding it a
-fake stream and asserting the `Searching` / `Streaming` states it emits —
-no Karoo system or BLE strap required. The in-app screens (`MainActivity`,
-`ReadinessActivity`, `SettingsActivity`) are covered by Robolectric tests
-for their on-launch rendering and input handling; the 2-minute BLE
-measurement loop and the `KarooExtension` service / `PolarBleManager`
-lifecycle still need a device.
+The in-app screens (`MainActivity`, `ReadinessActivity`,
+`SettingsActivity`) are covered by Robolectric tests for their on-launch
+rendering and input handling; the 2-minute BLE measurement loop and the
+`KarooExtension` service / `PolarBleManager` lifecycle still need a device.
 
 ### Coverage
 

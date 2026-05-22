@@ -1,38 +1,37 @@
 package com.inqulab.heartkaroo.efficiency
 
-import com.inqulab.heartkaroo.karoo.collectStreamMetric2
+import android.content.Context
+import com.inqulab.heartkaroo.HeartKarooExtension
+import com.inqulab.heartkaroo.karoo.streamFloatState
 import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.internal.Emitter
+import io.hammerhead.karooext.internal.ViewEmitter
+import io.hammerhead.karooext.models.DataType
 import io.hammerhead.karooext.models.StreamState
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.Flow
+import io.hammerhead.karooext.models.UpdateNumericConfig
+import io.hammerhead.karooext.models.ViewConfig
 
 /**
- * Karoo data field for Coggan Efficiency Factor (NP / avg HR) over the
- * last 30 minutes of riding.
+ * Karoo data field for Coggan Efficiency Factor (NP / avg HR). Computed
+ * continuously in RidePowerEngine over a rolling 30-min window.
  */
 class EfficiencyFactorDataType(
-    extensionId: String,
-    private val powerFlow: Flow<StreamState>,
-    private val hrFlow: Flow<StreamState>,
-    private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
-) : DataTypeImpl(extensionId, TYPE_ID) {
+    private val parent: HeartKarooExtension,
+) : DataTypeImpl(parent.extension, TYPE_ID) {
 
     companion object {
         const val TYPE_ID = "efficiency_factor"
-        const val FIELD = "efficiency_factor"
     }
 
     override fun startStream(emitter: Emitter<StreamState>) {
-        val calc = EfficiencyFactorCalculator()
-        val scope = CoroutineScope(dispatcher + SupervisorJob())
-        val job = scope.collectStreamMetric2(powerFlow, hrFlow, dataTypeId, FIELD, emitter) { t, p, h ->
-            (if (p != null && h != null) calc.add(t, p, h) else calc.current())?.toDouble()
-        }
-        emitter.setCancellable { job.cancel(); scope.cancel() }
+        val cancel = streamFloatState(parent.ridePowerEngine.efficiencyFactor, dataTypeId, emitter)
+        emitter.setCancellable { cancel() }
+    }
+
+    // EF (NP/HR) is a ~1.0–3.0 ratio; without a format hint Karoo renders it as a
+    // whole number. Borrow Intensity Factor's dimensionless two-decimal format.
+    override fun startView(context: Context, config: ViewConfig, emitter: ViewEmitter) {
+        emitter.onNext(UpdateNumericConfig(formatDataTypeId = DataType.Type.INTENSITY_FACTOR))
+        emitter.setCancellable {}
     }
 }
