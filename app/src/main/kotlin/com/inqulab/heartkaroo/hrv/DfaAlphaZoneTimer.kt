@@ -43,4 +43,13 @@ class DfaAlphaZoneTimer(
     @Synchronized fun aerobicSeconds(): Double = aerobicMs / 1000.0
     @Synchronized fun thresholdSeconds(): Double = thresholdMs / 1000.0
     @Synchronized fun hardSeconds(): Double = hardMs / 1000.0
+
+    @Synchronized
+    fun reset() {
+        lastTimeMs = -1L
+        lastAlpha = Double.NaN
+        aerobicMs = 0L
+        thresholdMs = 0L
+        hardMs = 0L
+    }
 }

@@ -9,12 +9,19 @@ import com.polar.sdk.api.model.PolarDeviceInfo
 import com.polar.sdk.api.model.PolarHrData
 import io.reactivex.rxjava3.disposables.Disposable
 import io.reactivex.rxjava3.schedulers.Schedulers
-import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
 import java.util.Collections
 
 /**
@@ -27,10 +34,20 @@ import java.util.Collections
  *    standard 2A37 characteristic, which truncates to 1/1024 s and drops
  *    intermediate beats between notifications)
  *
- * The public surface (BleEvent, connect(), startDeviceScan(), the HRV
- * StateFlows) is unchanged so the rest of the extension is unaffected.
+ * The BLE link is owned by the manager and lives independently of any flow
+ * collector: it is opened with [ensureConnected]/[connect] and stays up for the
+ * life of the process, so a strap stays connected even as Karoo tears down and
+ * recreates the service (e.g. when a ride starts). The manager is a process-wide
+ * singleton ([getInstance]) shared by the extension service and the Readiness
+ * screen, so there is exactly one strap link — switched via [ensureConnected],
+ * never dropped on a service/Activity teardown.
+ *
+ * The SDK refreshes the link itself on occasion (a brief local disconnect +
+ * reconnect, e.g. an idle→active interval change at ride start). That isn't ours
+ * to prevent, so [deviceDisconnected] holds the reported connection state for a
+ * short grace window: a quick reconnect never surfaces as "Searching".
  */
-class PolarBleManager(private val context: Context) {
+class PolarBleManager private constructor(private val context: Context) {
 
     sealed class BleEvent {
         object Connected : BleEvent()
@@ -41,7 +58,16 @@ class PolarBleManager(private val context: Context) {
     /** A strap found during [startDeviceScan]. [id] is the BT MAC address. */
     data class DiscoveredDevice(val id: String, val name: String)
 
-    private val api: PolarBleApi by lazy { sharedApi(context) }
+    private val api: PolarBleApi by lazy {
+        PolarBleApiDefaultImpl.defaultImplementation(
+            context.applicationContext,
+            setOf(
+                PolarBleApi.PolarBleSdkFeature.FEATURE_HR,
+                PolarBleApi.PolarBleSdkFeature.FEATURE_BATTERY_INFO,
+                PolarBleApi.PolarBleSdkFeature.FEATURE_DEVICE_INFO,
+            ),
+        ).apply { setAutomaticReconnection(true) }
+    }
 
     companion object {
         // After a gap longer than this, the retained HRV windows are stale and
@@ -53,22 +79,22 @@ class PolarBleManager(private val context: Context) {
         // artifacts — past a few percent the exponent is no longer trustworthy.
         private const val MAX_ALPHA1_ARTIFACT_RATE = 0.05
 
-        // A single Polar BLE stack for the whole process. The extension service
-        // and the Readiness screen each hold a PolarBleManager; without this they
-        // would spin up two BLE stacks that fight over the radio and cause drops.
-        @Volatile
-        private var sharedApiInstance: PolarBleApi? = null
+        // How long to keep reporting "connected" after a disconnect, to ride out
+        // the SDK's own quick reconnect without flashing Searching.
+        private const val RECONNECT_GRACE_MS = 8_000L
 
-        private fun sharedApi(context: Context): PolarBleApi =
-            sharedApiInstance ?: synchronized(this) {
-                sharedApiInstance ?: PolarBleApiDefaultImpl.defaultImplementation(
-                    context.applicationContext,
-                    setOf(
-                        PolarBleApi.PolarBleSdkFeature.FEATURE_HR,
-                        PolarBleApi.PolarBleSdkFeature.FEATURE_BATTERY_INFO,
-                        PolarBleApi.PolarBleSdkFeature.FEATURE_DEVICE_INFO,
-                    ),
-                ).apply { setAutomaticReconnection(true) }.also { sharedApiInstance = it }
+        // One manager — and therefore one Polar BLE stack and one strap link —
+        // for the whole process. The extension service and the Readiness screen
+        // share it so the strap stays connected as the service is torn down and
+        // recreated (notably at ride start) instead of being dropped and
+        // reconnected. Two separate managers used to fight over the radio and the
+        // shared SDK callback, and a service teardown would disconnect the strap.
+        @Volatile
+        private var instance: PolarBleManager? = null
+
+        fun getInstance(context: Context): PolarBleManager =
+            instance ?: synchronized(this) {
+                instance ?: PolarBleManager(context.applicationContext).also { instance = it }
             }
     }
 
@@ -77,6 +103,29 @@ class PolarBleManager(private val context: Context) {
     // running on the same API instance during connectToDevice().
     @Volatile
     private var scanDisposable: Disposable? = null
+
+    // The live BLE link is owned by this manager, not by any single flow
+    // collector. These track that link so it survives Karoo tearing down and
+    // recreating the connectDevice emitter (which happens at ride start).
+    @Volatile
+    private var hrDisposable: Disposable? = null
+    @Volatile
+    private var connectingMac: String? = null
+    private var disconnectedAt = 0L
+
+    // Process-scoped (the manager is a singleton): defers the "really
+    // disconnected" flip so a quick auto-reconnect doesn't flash Searching.
+    private val managerScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+
+    @Volatile
+    private var reconnectGraceJob: Job? = null
+
+    // Hot, shared event stream. Collectors come and go (each connectDevice or
+    // Readiness subscription); the connection underneath them does not.
+    private val events = MutableSharedFlow<BleEvent>(
+        extraBufferCapacity = 64,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
 
     private val _rmssdFlow = MutableStateFlow(0f)
     val rmssdFlow: StateFlow<Float> = _rmssdFlow.asStateFlow()
@@ -186,22 +235,81 @@ class PolarBleManager(private val context: Context) {
         }
     }
 
-    fun connect(macAddress: String): Flow<BleEvent> = callbackFlow {
-        val scope = this
-        var hrDisposable: Disposable? = null
+    /**
+     * Ensures a BLE link to [macAddress] and returns the shared [BleEvent]
+     * stream. The link is owned by the manager, NOT by the returned flow:
+     * cancelling a collector stops delivery to that collector but leaves the
+     * strap connected. Karoo tears down and recreates the connectDevice emitter
+     * across lifecycle changes (notably when a ride starts); disconnecting on
+     * every teardown was dropping the strap mid-ride, and because
+     * disconnectFromDevice is an explicit disconnect the SDK would not
+     * auto-reconnect afterwards. Call [disconnect] to actually drop the link.
+     */
+    fun connect(macAddress: String): Flow<BleEvent> {
+        ensureConnected(macAddress)
+        return events.asSharedFlow()
+    }
 
+    /** The shared connection/HR event stream, decoupled from the link lifecycle. */
+    fun events(): Flow<BleEvent> = events.asSharedFlow()
+
+    /** Idempotently open the link to [macAddress]. (Re)claims the shared SDK
+     *  callback for this manager and only issues a connect when the strap
+     *  changes, so a repeat call for the same strap is a no-op that won't bounce
+     *  the link. */
+    @Synchronized
+    fun ensureConnected(macAddress: String) {
         // Never scan and connect at the same time (Polar SDK pitfall).
         scanDisposable?.dispose()
         scanDisposable = null
+        // The Polar SDK keeps a single callback per API instance, and this
+        // process shares one API across the service and the Readiness screen, so
+        // (re)claim it for whichever manager is currently driving the link.
+        api.setApiCallback(apiCallback)
+        if (connectingMac == macAddress) return
+        connectingMac?.let { old -> runCatching { api.disconnectFromDevice(old) } }
+        connectingMac = macAddress
+        runCatching { api.connectToDevice(macAddress) }
+    }
 
-        // The SDK identifies the device in callbacks by its Polar device id
-        // (e.g. "B36B5B2C"), NOT the BT MAC address we connect with, so we
-        // must not match against `address` here. This manager only ever
-        // connects to one device per connect(), so no disambiguation is needed.
-        var disconnectedAt = 0L
+    /** Drop the BLE link and reset HRV state. Intentionally NOT called on a
+     *  service or Activity teardown — the link is process-scoped and must outlive
+     *  them (a ride start recreates the service). Reserved for a deliberate full
+     *  teardown; routine strap switching goes through [ensureConnected]. */
+    @Synchronized
+    fun disconnect() {
+        reconnectGraceJob?.cancel()
+        reconnectGraceJob = null
+        hrDisposable?.dispose()
+        hrDisposable = null
+        connectingMac?.let { mac -> runCatching { api.disconnectFromDevice(mac) } }
+        connectingMac = null
+        _connectedFlow.value = false
+        resetHrvCalculators()
+    }
 
-        val callback = object : PolarBleApiCallback() {
+    /** Reset the DFA α1 window so it warms up fresh for a new ride. The manager
+     *  is process-scoped and the strap stays connected between rides, so α1's long
+     *  (~2 min / up to 480-beat) window would otherwise carry pre-ride data and
+     *  show a stale value the instant recording starts. Call at ride start. The
+     *  short-window metrics (RMSSD, SDNN, …) self-refresh in seconds and are left
+     *  live. */
+    @Synchronized
+    fun resetDfaAlpha1() {
+        dfaCalculator.reset()
+        _dfaAlpha1Flow.value = null
+    }
+
+    // The SDK identifies the device in callbacks by its Polar device id
+    // (e.g. "B36B5B2C"), NOT the BT MAC we connect with, so we don't match on the
+    // MAC here. Only one strap is connected at a time.
+    private val apiCallback: PolarBleApiCallback by lazy {
+        object : PolarBleApiCallback() {
             override fun deviceConnected(polarDeviceInfo: PolarDeviceInfo) {
+                // A reconnect landed within the grace window — cancel the pending
+                // "really disconnected" flip so fields never flickered.
+                reconnectGraceJob?.cancel()
+                reconnectGraceJob = null
                 // Drop the retained HRV windows only if the gap was long enough
                 // that they'd be stale; a brief auto-reconnect keeps them so the
                 // fields resume immediately instead of refilling for ~30 beats.
@@ -212,20 +320,27 @@ class PolarBleManager(private val context: Context) {
                 }
                 disconnectedAt = 0L
                 _connectedFlow.value = true
-                scope.trySend(BleEvent.Connected)
+                events.tryEmit(BleEvent.Connected)
             }
 
             override fun deviceDisconnected(polarDeviceInfo: PolarDeviceInfo) {
                 disconnectedAt = System.currentTimeMillis()
-                _connectedFlow.value = false
                 hrDisposable?.dispose()
                 hrDisposable = null
-                // Blank the fields but keep the windows; a fast reconnect resumes
-                // at once. resetHrvCalculators() runs on a long gap / teardown.
-                clearHrvOutputs()
-                scope.trySend(BleEvent.Disconnected)
-                // setAutomaticReconnection(true) makes the SDK keep retrying;
-                // we just clear local state and wait for the next deviceConnected.
+                // The SDK auto-reconnects, and its own connect/reconnect cycle
+                // (seen at ride start) drops then restores the link within a few
+                // seconds. Don't surface that as a loss immediately: keep
+                // "connected" and the last values through a short grace window so
+                // fields don't flash Searching. Only if the strap is genuinely
+                // gone does the window elapse and we report the disconnect.
+                reconnectGraceJob?.cancel()
+                reconnectGraceJob = managerScope.launch {
+                    delay(RECONNECT_GRACE_MS)
+                    _connectedFlow.value = false
+                    clearHrvOutputs()
+                    events.tryEmit(BleEvent.Disconnected)
+                    reconnectGraceJob = null
+                }
             }
 
             override fun disInformationReceived(identifier: String, disInfo: DisInfo) {
@@ -246,29 +361,16 @@ class PolarBleManager(private val context: Context) {
                 hrDisposable = api.startHrStreaming(identifier)
                     .observeOn(Schedulers.computation())
                     .subscribe(
-                        { hrData -> consumeHrData(hrData, scope) },
+                        { hrData -> consumeHrData(hrData) },
                         { /* stream error — SDK will fire deviceDisconnected if relevant */ },
                     )
             }
         }
-
-        api.setApiCallback(callback)
-        runCatching { api.connectToDevice(macAddress) }
-
-        awaitClose {
-            hrDisposable?.dispose()
-            runCatching { api.disconnectFromDevice(macAddress) }
-            _connectedFlow.value = false
-            resetHrvCalculators()
-        }
     }
 
-    private fun consumeHrData(
-        hrData: PolarHrData,
-        scope: kotlinx.coroutines.channels.SendChannel<BleEvent>,
-    ) {
+    private fun consumeHrData(hrData: PolarHrData) {
         for (sample in hrData.samples) {
-            if (sample.hr > 0) scope.trySend(BleEvent.Heartrate(sample.hr))
+            if (sample.hr > 0) events.tryEmit(BleEvent.Heartrate(sample.hr))
 
             val contactOk = !sample.contactStatusSupported || sample.contactStatus
             _contactOkFlow.value = contactOk

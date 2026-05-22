@@ -56,7 +56,7 @@ class ReadinessActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_readiness)
-        bleManager = PolarBleManager(applicationContext)
+        bleManager = PolarBleManager.getInstance(applicationContext)
         store = ReadinessStore(applicationContext)
         aetStore = AerobicThresholdStore(applicationContext)
         cadenceStore = OptimalCadenceStore(applicationContext)
@@ -180,6 +180,9 @@ class ReadinessActivity : AppCompatActivity() {
         measurementJob?.cancel(); measurementJob = null
         connectionJob?.cancel(); connectionJob = null
         stopScan?.invoke(); stopScan = null
+        // Don't disconnect: the strap link is a process-wide singleton shared with
+        // the extension service, which needs it during the ride. Closing this
+        // screen just stops our collectors; the link stays up.
     }
 
     private companion object {

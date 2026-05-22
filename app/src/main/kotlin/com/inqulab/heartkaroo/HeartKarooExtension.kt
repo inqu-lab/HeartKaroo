@@ -1,15 +1,11 @@
 package com.inqulab.heartkaroo
 
-import com.inqulab.heartkaroo.aet.AerobicThresholdCalibrator
 import com.inqulab.heartkaroo.aet.AerobicThresholdDataType
 import com.inqulab.heartkaroo.aet.AerobicThresholdStore
-import com.inqulab.heartkaroo.cadence.OptimalCadenceCalculator
 import com.inqulab.heartkaroo.cadence.OptimalCadenceDataType
 import com.inqulab.heartkaroo.cadence.OptimalCadenceStore
 import com.inqulab.heartkaroo.climb.VamDataType
 import com.inqulab.heartkaroo.decoupling.CardiacPopDataType
-import com.inqulab.heartkaroo.decoupling.CardiacPopDetector
-import com.inqulab.heartkaroo.decoupling.DecouplingCalculator
 import com.inqulab.heartkaroo.decoupling.DecouplingDataType
 import com.inqulab.heartkaroo.decoupling.PaHrDecouplingDataType
 import com.inqulab.heartkaroo.efficiency.CardiacCostDataType
@@ -18,19 +14,16 @@ import com.inqulab.heartkaroo.power.CoastingDataType
 import com.inqulab.heartkaroo.power.IntensityFactorDataType
 import com.inqulab.heartkaroo.power.KilojoulesDataType
 import com.inqulab.heartkaroo.power.MmpDataType
-import com.inqulab.heartkaroo.power.QuadrantAnalysisCalculator
 import com.inqulab.heartkaroo.power.QuadrantAnalysisDataType
+import com.inqulab.heartkaroo.power.RidePowerEngine
 import com.inqulab.heartkaroo.power.TssDataType
 import com.inqulab.heartkaroo.power.VariabilityIndexDataType
+import com.inqulab.heartkaroo.settings.RiderSettings
 import com.inqulab.heartkaroo.hrv.DfaAlpha1DataType
-import com.inqulab.heartkaroo.hrv.DfaAlphaZoneTimer
 import com.inqulab.heartkaroo.hrv.HRVDataType
 import com.inqulab.heartkaroo.hrv.HRVStressDataType
 import com.inqulab.heartkaroo.hrv.HrvFlowDataType
 import com.inqulab.heartkaroo.hrv.PolarBleManager
-import com.inqulab.heartkaroo.karoo.streamDataFlow
-import com.inqulab.heartkaroo.settings.RiderSettings
-import com.inqulab.heartkaroo.wprime.WPrimeBalanceCalculator
 import com.inqulab.heartkaroo.wprime.WPrimeBalanceDataType
 import io.hammerhead.karooext.KarooSystemService
 import io.hammerhead.karooext.extension.KarooExtension
@@ -46,7 +39,7 @@ import io.hammerhead.karooext.models.FitEffect
 import io.hammerhead.karooext.models.InRideAlert
 import io.hammerhead.karooext.models.OnConnectionStatus
 import io.hammerhead.karooext.models.OnDataPoint
-import io.hammerhead.karooext.models.StreamState
+import io.hammerhead.karooext.models.RequestBluetooth
 import io.hammerhead.karooext.models.WriteToRecordMesg
 import io.hammerhead.karooext.models.WriteToSessionMesg
 import kotlinx.coroutines.CoroutineScope
@@ -55,7 +48,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
@@ -64,6 +57,12 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
 
     companion object {
         const val EXTENSION_ID = "heartkaroo"
+
+        // Reserve the BT radio once per process. Re-requesting on every service
+        // recreate (e.g. at ride start) risks cycling the radio and dropping the
+        // strap, and we never release it — the reservation lives with the process.
+        @Volatile
+        private var bluetoothRequested = false
 
         val RMSSD_FIELD = DeveloperField(
             fieldDefinitionNumber = 0,
@@ -219,6 +218,9 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
     lateinit var bleManager: PolarBleManager
         private set
 
+    lateinit var ridePowerEngine: RidePowerEngine
+        private set
+
     override val types by lazy {
         listOf(
             DecouplingDataType(this),
@@ -236,11 +238,11 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             CoastingDataType(this),
             QuadrantAnalysisDataType(this),
             VamDataType(this),
-            MmpDataType(this, 5_000L, "mmp_5s"),
-            MmpDataType(this, 60_000L, "mmp_1min"),
-            MmpDataType(this, 5L * 60 * 1000, "mmp_5min"),
-            MmpDataType(this, 20L * 60 * 1000, "mmp_20min"),
-            MmpDataType(this, 60L * 60 * 1000, "mmp_60min"),
+            MmpDataType(this, "mmp_5s"),
+            MmpDataType(this, "mmp_1min"),
+            MmpDataType(this, "mmp_5min"),
+            MmpDataType(this, "mmp_20min"),
+            MmpDataType(this, "mmp_60min"),
             HRVDataType(bleManager, EXTENSION_ID),
             HRVStressDataType(bleManager, EXTENSION_ID),
             DfaAlpha1DataType(bleManager, EXTENSION_ID),
@@ -248,19 +250,40 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             HrvFlowDataType(EXTENSION_ID, "hrv_pnn50", bleManager.pnn50Flow, bleManager.connectedFlow),
             HrvFlowDataType(EXTENSION_ID, "hrv_sd1", bleManager.sd1Flow, bleManager.connectedFlow),
             HrvFlowDataType(EXTENSION_ID, "hrv_sd2", bleManager.sd2Flow, bleManager.connectedFlow),
-            HrvFlowDataType(EXTENSION_ID, "hrv_sd1_sd2_ratio", bleManager.sd1Sd2RatioFlow, bleManager.connectedFlow),
+            HrvFlowDataType(
+                EXTENSION_ID, "hrv_sd1_sd2_ratio", bleManager.sd1Sd2RatioFlow,
+                bleManager.connectedFlow, DataType.Type.INTENSITY_FACTOR,
+            ),
             HrvFlowDataType(EXTENSION_ID, "respiratory_rate", bleManager.respiratoryRateFlow, bleManager.connectedFlow),
             HrvFlowDataType(EXTENSION_ID, "ectopic_rate", bleManager.ectopicRateFlow, bleManager.connectedFlow),
         )
     }
 
-    private val serviceScope = CoroutineScope(Dispatchers.IO)
+    // SupervisorJob so one failing collector (engine stream, battery watch)
+    // doesn't cancel the others.
+    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun onCreate() {
         super.onCreate()
         karooSystem = KarooSystemService(applicationContext)
-        bleManager = PolarBleManager(applicationContext)
-        karooSystem.connect {}
+        bleManager = PolarBleManager.getInstance(applicationContext)
+        // Owns the per-ride power metrics and feeds them from one long-lived set
+        // of stream collectors, so they accumulate for the whole ride regardless
+        // of which page is on screen (see RidePowerEngine).
+        ridePowerEngine = RidePowerEngine(
+            karooSystem, RiderSettings(applicationContext), bleManager.dfaAlpha1Flow, serviceScope,
+        )
+        // We run our own BLE stack (Polar SDK) for the strap. Tell Karoo we're
+        // using the radio so the system coordinates with us instead of reclaiming
+        // it when a ride starts. Requested once per process (see flag) and never
+        // released, so a service recreate doesn't cycle the radio.
+        karooSystem.connect { connected ->
+            if (connected && !bluetoothRequested) {
+                bluetoothRequested = true
+                karooSystem.dispatch(RequestBluetooth(EXTENSION_ID))
+            }
+        }
+        ridePowerEngine.start()
         watchStrapBattery()
     }
 
@@ -310,22 +333,40 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
 
     override fun connectDevice(uid: String, emitter: Emitter<DeviceEvent>) {
         emitter.onNext(OnConnectionStatus(ConnectionStatus.SEARCHING))
+        // Open (or reuse) the link; it's owned by the manager, so cancelling this
+        // emitter below won't drop the strap. Karoo recreates this emitter across
+        // lifecycle changes (e.g. at ride start) — tearing the link down on each
+        // cancel was disconnecting the strap mid-ride.
+        bleManager.ensureConnected(uid)
         val job: Job = CoroutineScope(Dispatchers.IO).launch {
-            bleManager.connect(uid).collect { event ->
-                when (event) {
-                    is PolarBleManager.BleEvent.Connected ->
-                        emitter.onNext(OnConnectionStatus(ConnectionStatus.CONNECTED))
-                    is PolarBleManager.BleEvent.Disconnected ->
-                        emitter.onNext(OnConnectionStatus(ConnectionStatus.SEARCHING))
-                    is PolarBleManager.BleEvent.Heartrate ->
-                        emitter.onNext(
-                            OnDataPoint(
-                                DataPoint(
-                                    dataTypeId = DataType.Type.HEART_RATE,
-                                    values = mapOf(DataType.Field.SINGLE to event.bpm.toDouble()),
-                                )
+            // connectedFlow is a StateFlow, so it always replays the current link
+            // state to a freshly-recreated emitter (the event stream below carries
+            // only future transitions).
+            launch {
+                bleManager.connectedFlow.collect { connected ->
+                    emitter.onNext(
+                        OnConnectionStatus(
+                            if (connected) ConnectionStatus.CONNECTED
+                            else ConnectionStatus.SEARCHING,
+                        )
+                    )
+                }
+            }
+            bleManager.events().collect { event ->
+                if (event is PolarBleManager.BleEvent.Heartrate) {
+                    emitter.onNext(
+                        OnDataPoint(
+                            DataPoint(
+                                dataTypeId = DataType.Type.HEART_RATE,
+                                // The HR data type reads its value from
+                                // Field.HEART_RATE; under Field.SINGLE it shows but
+                                // is never recorded to the FIT. Tag the sourceId
+                                // with the device uid so Karoo logs it as this sensor.
+                                values = mapOf(DataType.Field.HEART_RATE to event.bpm.toDouble()),
+                                sourceId = uid,
                             )
                         )
+                    )
                 }
             }
         }
@@ -333,6 +374,12 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
     }
 
     override fun startFit(emitter: Emitter<FitEffect>) {
+        // A new recording session = a new ride: reset the per-ride power metrics
+        // so best-power, TSS, kJ etc. count this ride, not the previous one. Same
+        // for DFA α1 — its long window otherwise shows a stale pre-ride value the
+        // instant recording starts; reset it so it warms up fresh for this ride.
+        ridePowerEngine.resetRide()
+        bleManager.resetDfaAlpha1()
         val scope = CoroutineScope(Dispatchers.IO)
         val rmssdJob: Job = scope.launch {
             bleManager.rmssdFlow
@@ -369,113 +416,40 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
                     emitter.onNext(WriteToRecordMesg(FieldValue(SDNN_FIELD, sdnn.toDouble())))
                 }
         }
-        val settings = RiderSettings(applicationContext)
-        val aetCalibrator = AerobicThresholdCalibrator()
-        val aetPowerJob: Job = scope.launch {
-            karooSystem.streamDataFlow(DataType.Type.POWER).collect { ps ->
-                val p = (ps as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull()
-                    ?: return@collect
-                aetCalibrator.addPower(System.currentTimeMillis(), p)
+        // Mirror the live AeT estimate into the FIT record while recording; the
+        // engine owns the calculator so it accumulates for the whole ride.
+        val aetJob: Job = scope.launch {
+            ridePowerEngine.aet.filterNotNull().collect { est ->
+                emitter.onNext(WriteToRecordMesg(FieldValue(AET_FIELD, est.toDouble())))
             }
         }
-        val dfaZones = DfaAlphaZoneTimer()
-        val aetAlphaJob: Job = scope.launch {
-            bleManager.dfaAlpha1Flow.filterNotNull().collect { a ->
-                aetCalibrator.addAlpha(a)
-                dfaZones.add(System.currentTimeMillis(), a.toDouble())
-                aetCalibrator.currentEstimate()?.let { est ->
-                    emitter.onNext(WriteToRecordMesg(FieldValue(AET_FIELD, est.toDouble())))
-                }
-            }
-        }
-        val cadenceCalc = OptimalCadenceCalculator()
-        val quadrantCalc = QuadrantAnalysisCalculator(ftpW = settings.ftpW.toDouble())
-        val cadenceJob: Job = scope.launch {
-            combine(
-                karooSystem.streamDataFlow(DataType.Type.POWER),
-                karooSystem.streamDataFlow(DataType.Type.HEART_RATE),
-                karooSystem.streamDataFlow(DataType.Type.CADENCE),
-            ) { ps, hs, cs ->
-                Triple(
-                    (ps as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull(),
-                    (hs as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull(),
-                    (cs as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull(),
-                )
-            }.collect { (p, h, c) ->
-                val now = System.currentTimeMillis()
-                if (p != null && c != null) quadrantCalc.add(now, p, c)
-                if (p != null && h != null && c != null) cadenceCalc.add(p, h, c)
-            }
-        }
-        val wPrimeCalc = WPrimeBalanceCalculator(
-            criticalPowerW = settings.criticalPowerW.toDouble(),
-            wPrimeJ = settings.wPrimeJ.toDouble(),
-        )
-        // A "match" is each fresh dip below 25% W′, re-armed only once it has
-        // recovered above 30% so flicker around the line doesn't double-count.
-        val matchThreshold = settings.wPrimeJ * 0.25
-        val matchRearm = settings.wPrimeJ * 0.30
-        var wPrimeMin = Double.POSITIVE_INFINITY
-        var matchesBurned = 0
-        var matchArmed = true
-        val wPrimeJob: Job = scope.launch {
-            karooSystem.streamDataFlow(DataType.Type.POWER).collect { ps ->
-                val p = (ps as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull()
-                    ?: return@collect
-                val bal = wPrimeCalc.add(System.currentTimeMillis(), p).toDouble()
-                if (bal < wPrimeMin) wPrimeMin = bal
-                if (matchArmed && bal < matchThreshold) {
-                    matchesBurned++
-                    matchArmed = false
-                } else if (!matchArmed && bal >= matchRearm) {
-                    matchArmed = true
-                }
-            }
-        }
-        val decouplingCalc = DecouplingCalculator()
-        val popDetector = CardiacPopDetector()
-        val cardiacPopJob: Job = scope.launch {
-            combine(
-                karooSystem.streamDataFlow(DataType.Type.POWER),
-                karooSystem.streamDataFlow(DataType.Type.HEART_RATE),
-            ) { ps, hs ->
-                Pair(
-                    (ps as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull(),
-                    (hs as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull(),
-                )
-            }.collect { (p, h) ->
-                val now = System.currentTimeMillis()
-                val pct = if (p != null && h != null) decouplingCalc.add(now, p, h)
-                else decouplingCalc.current()
-                popDetector.add(now, pct)
-            }
-        }
-        // Single periodic writer for the after-ride session summaries.
-        // WriteToSessionMesg keeps the latest value, so the final tick before
-        // the ride ends carries the ride's summary numbers.
+        // Single periodic writer for the after-ride session summaries. The engine
+        // owns the calculators (they accumulate for the whole ride regardless of
+        // page); we snapshot them here. WriteToSessionMesg keeps the latest value,
+        // so the final tick before the ride ends carries the summary numbers.
         val summaryJob: Job = scope.launch {
             while (isActive) {
                 delay(SESSION_SUMMARY_INTERVAL_MS)
-                aetCalibrator.currentEstimate()?.let {
+                ridePowerEngine.aetCurrentEstimate()?.let {
                     emitter.onNext(WriteToSessionMesg(FieldValue(AET_FIELD, it.toDouble())))
                 }
-                aetCalibrator.estimateForTarget(0.50)?.let {
+                ridePowerEngine.vt2CurrentEstimate()?.let {
                     emitter.onNext(WriteToSessionMesg(FieldValue(VT2_FIELD, it.toDouble())))
                 }
-                cadenceCalc.optimalCadence()?.let {
+                ridePowerEngine.optimalCadenceCurrent()?.let {
                     emitter.onNext(WriteToSessionMesg(FieldValue(OPTIMAL_CADENCE_FIELD, it.toDouble())))
                 }
-                if (wPrimeMin.isFinite()) {
-                    emitter.onNext(WriteToSessionMesg(FieldValue(WPRIME_MIN_FIELD, wPrimeMin)))
-                    emitter.onNext(WriteToSessionMesg(FieldValue(MATCHES_BURNED_FIELD, matchesBurned.toDouble())))
+                ridePowerEngine.wPrimeMinJ()?.let {
+                    emitter.onNext(WriteToSessionMesg(FieldValue(WPRIME_MIN_FIELD, it)))
+                    emitter.onNext(WriteToSessionMesg(FieldValue(MATCHES_BURNED_FIELD, ridePowerEngine.matchesBurnedCount.toDouble())))
                 }
-                emitter.onNext(WriteToSessionMesg(FieldValue(DFA_A1_AEROBIC_FIELD, dfaZones.aerobicSeconds())))
-                emitter.onNext(WriteToSessionMesg(FieldValue(DFA_A1_THRESHOLD_FIELD, dfaZones.thresholdSeconds())))
-                emitter.onNext(WriteToSessionMesg(FieldValue(DFA_A1_HARD_FIELD, dfaZones.hardSeconds())))
-                popDetector.getPopMinutes()?.let {
+                emitter.onNext(WriteToSessionMesg(FieldValue(DFA_A1_AEROBIC_FIELD, ridePowerEngine.dfaAerobicSeconds())))
+                emitter.onNext(WriteToSessionMesg(FieldValue(DFA_A1_THRESHOLD_FIELD, ridePowerEngine.dfaThresholdSeconds())))
+                emitter.onNext(WriteToSessionMesg(FieldValue(DFA_A1_HARD_FIELD, ridePowerEngine.dfaHardSeconds())))
+                ridePowerEngine.cardiacPop.value?.let {
                     emitter.onNext(WriteToSessionMesg(FieldValue(CARDIAC_POP_FIELD, it.toDouble())))
                 }
-                quadrantCalc.distributionPercent()?.let { d ->
+                ridePowerEngine.quadrantDistribution()?.let { d ->
                     emitter.onNext(WriteToSessionMesg(FieldValue(QUADRANT1_FIELD, d[0])))
                     emitter.onNext(WriteToSessionMesg(FieldValue(QUADRANT2_FIELD, d[1])))
                     emitter.onNext(WriteToSessionMesg(FieldValue(QUADRANT3_FIELD, d[2])))
@@ -489,20 +463,16 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             dfaJob.cancel()
             respJob.cancel()
             sdnnJob.cancel()
-            aetPowerJob.cancel()
-            aetAlphaJob.cancel()
-            cadenceJob.cancel()
-            wPrimeJob.cancel()
-            cardiacPopJob.cancel()
+            aetJob.cancel()
             summaryJob.cancel()
-            val final = aetCalibrator.currentEstimate()
-            val samples = aetCalibrator.sampleCount
+            val final = ridePowerEngine.aetCurrentEstimate()
+            val samples = ridePowerEngine.aetSampleCount
             if (final != null && samples >= MIN_AET_SAMPLES_TO_PERSIST) {
                 AerobicThresholdStore(applicationContext)
                     .record(System.currentTimeMillis(), final, samples)
             }
-            val cadenceFinal = cadenceCalc.optimalCadence()
-            val cadenceSamples = cadenceCalc.totalSamples
+            val cadenceFinal = ridePowerEngine.optimalCadenceCurrent()
+            val cadenceSamples = ridePowerEngine.optimalCadenceSamples
             if (cadenceFinal != null && cadenceSamples >= MIN_CADENCE_SAMPLES_TO_PERSIST) {
                 OptimalCadenceStore(applicationContext)
                     .record(System.currentTimeMillis(), cadenceFinal, cadenceSamples)
@@ -511,6 +481,11 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
     }
 
     override fun onDestroy() {
+        // Deliberately do NOT disconnect the strap or release BT here: Karoo
+        // recreates the service at ride start, and dropping the link (status=22
+        // local teardown) then auto-reconnecting was the ~4 s "Searching" gap.
+        // The strap link is process-scoped (PolarBleManager singleton) and the
+        // SDK keeps it alive across the recreate.
         serviceScope.cancel()
         karooSystem.disconnect()
         super.onDestroy()
