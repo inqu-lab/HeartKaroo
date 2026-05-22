@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/dfa_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="4dp">
+
+    <TextView
+        android:id="@+id/dfa_value"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="--"
+        android:textColor="@android:color/white"
+        android:textStyle="bold"
+        android:textSize="32sp" />
+
+    <TextView
+        android:id="@+id/dfa_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="DFA α1"
+        android:textColor="@android:color/white"
+        android:textSize="12sp" />
+
+</LinearLayout>

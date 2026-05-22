@@ -33,7 +33,7 @@
         typeId="dfa_alpha1"
         displayName="@string/dfa_alpha1_name"
         description="@string/dfa_alpha1_description"
-        graphical="false"
+        graphical="true"
         icon="@drawable/ic_hrv" />
 
     <DataType
