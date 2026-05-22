@@ -1,7 +1,6 @@
 package com.inqulab.heartkaroo.hrv
 
 import android.content.Context
-import android.util.TypedValue
 import android.widget.RemoteViews
 import com.inqulab.heartkaroo.R
 import io.hammerhead.karooext.extension.DataTypeImpl
@@ -43,10 +42,9 @@ class DfaAlpha1DataType(
     }
 
     override fun startView(context: Context, config: ViewConfig, emitter: ViewEmitter) {
-        val valueSizeSp = config.textSize.toFloat()
         if (config.preview) {
             val zone = DfaZone.LT1_TO_LT2
-            emitter.updateView(view(context, "0.62", zone.label, zone.color, valueSizeSp))
+            emitter.updateView(view(context, "0.62", zone.label, zone.color))
             emitter.setCancellable {}
             return
         }
@@ -55,9 +53,9 @@ class DfaAlpha1DataType(
             bleManager.dfaAlpha1Flow.collect { alpha ->
                 val rv = if (alpha != null) {
                     val zone = classifyDfaZone(alpha.toDouble())
-                    view(context, formatAlpha(alpha), zone.label, zone.color, valueSizeSp)
+                    view(context, formatAlpha(alpha), zone.label, zone.color)
                 } else {
-                    view(context, "--", "DFA α1", NEUTRAL_COLOR, valueSizeSp)
+                    view(context, "--", "DFA α1", NEUTRAL_COLOR)
                 }
                 emitter.updateView(rv)
             }
@@ -70,10 +68,8 @@ class DfaAlpha1DataType(
         value: String,
         label: String,
         color: Int,
-        valueSizeSp: Float,
     ): RemoteViews = RemoteViews(context.packageName, R.layout.dfa_alpha1_field).apply {
         setTextViewText(R.id.dfa_value, value)
-        setTextViewTextSize(R.id.dfa_value, TypedValue.COMPLEX_UNIT_SP, valueSizeSp)
         setTextViewText(R.id.dfa_label, label)
         setInt(R.id.dfa_root, "setBackgroundColor", color)
     }
