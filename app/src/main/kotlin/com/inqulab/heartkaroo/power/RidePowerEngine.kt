@@ -111,10 +111,10 @@ class RidePowerEngine(
     fun mmpFlow(typeId: String): StateFlow<Float?> = _mmp.getValue(typeId).asStateFlow()
 
     @Volatile
-    private var latestHr: Double? = null
+    internal var latestHr: Double? = null
 
     @Volatile
-    private var latestCadence: Double? = null
+    internal var latestCadence: Double? = null
 
     /** Start the long-lived collectors. Call once from the service. Consumers
      *  registered before the KarooSystem connects are queued and reapplied. */
@@ -142,38 +142,39 @@ class RidePowerEngine(
         scope.launch {
             karooSystem.streamDataFlow(DataType.Type.ELEVATION_GAIN).collect { es ->
                 val e = es.singleValue() ?: return@collect
-                _vam.value = vamCalc.add(System.currentTimeMillis(), e)
+                onElevation(System.currentTimeMillis(), e)
             }
         }
         scope.launch {
-            dfaAlpha1.filterNotNull().collect { a ->
-                aetCalc.addAlpha(a)
-                dfaZones.add(System.currentTimeMillis(), a.toDouble())
-                _aet.value = aetCalc.currentEstimate()
-            }
+            dfaAlpha1.filterNotNull().collect { onAlpha(it) }
         }
     }
 
     @Synchronized
-    private fun onPower(now: Long, power: Double) {
-        val ftp = settings.ftpW.coerceAtLeast(1)
+    internal fun onElevation(now: Long, elevationM: Double) {
+        _vam.value = vamCalc.add(now, elevationM)
+    }
+
+    @Synchronized
+    internal fun onAlpha(alpha: Float) {
+        aetCalc.addAlpha(alpha)
+        dfaZones.add(System.currentTimeMillis(), alpha.toDouble())
+        _aet.value = aetCalc.currentEstimate()
+    }
+
+    @Synchronized
+    internal fun onPower(now: Long, power: Double) {
         val hr = latestHr
 
         npCalc.add(now, power)
         val np = npCalc.normalizedPower()
-        _intensityFactor.value = np?.let { it / ftp }
-        val avg = npCalc.averagePower()
-        _variabilityIndex.value = if (np != null && avg != null && avg > 0f) np / avg else null
+        _intensityFactor.value = PowerMetrics.intensityFactor(np, settings.ftpW)
+        _variabilityIndex.value = PowerMetrics.variabilityIndex(np, npCalc.averagePower())
 
         npTss.add(now, power)
-        val npT = npTss.normalizedPower()
-        _tss.value = if (npT == null) {
-            null
-        } else {
-            val hours = npTss.elapsedSec() / 3600.0
-            val iF = npT / ftp
-            (hours * iF * iF * 100.0).toFloat()
-        }
+        _tss.value = PowerMetrics.trainingStressScore(
+            npTss.normalizedPower(), settings.ftpW, npTss.elapsedSec(),
+        )
 
         _kilojoules.value = kjCalc.add(now, power)
         _coasting.value = coastingCalc.add(now, power)
@@ -216,7 +217,7 @@ class RidePowerEngine(
     }
 
     @Synchronized
-    private fun onSpeed(now: Long, speedMps: Double) {
+    internal fun onSpeed(now: Long, speedMps: Double) {
         val hr = latestHr
         _paHrDecoupling.value = if (hr != null && hr > 0.0) {
             paHrDecouplingCalc.add(now, speedMps, hr)?.toFloat()

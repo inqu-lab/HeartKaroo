@@ -55,6 +55,20 @@ import kotlinx.coroutines.launch
 
 class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
 
+    /** A read of the engine's after-ride summary metrics at one tick. */
+    class RideSummarySnapshot(
+        val aet: Float?,
+        val vt2: Float?,
+        val optimalCadence: Float?,
+        val wPrimeMinJ: Double?,
+        val matchesBurned: Int,
+        val dfaAerobicS: Double,
+        val dfaThresholdS: Double,
+        val dfaHardS: Double,
+        val cardiacPopMin: Float?,
+        val quadrantPct: DoubleArray?,
+    )
+
     companion object {
         const val EXTENSION_ID = "heartkaroo"
 
@@ -199,6 +213,32 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             units = "pct",
         )
 
+        /**
+         * Field values for the session message from one engine snapshot.
+         * Metrics that haven't resolved (null) are omitted; matches-burned only
+         * accompanies W′-min (no W′ data means the count is meaningless); the DFA
+         * α1 zone seconds are always written (0 is a valid "no time there").
+         */
+        fun sessionSummaryFields(s: RideSummarySnapshot): List<FieldValue> = buildList {
+            s.aet?.let { add(FieldValue(AET_FIELD, it.toDouble())) }
+            s.vt2?.let { add(FieldValue(VT2_FIELD, it.toDouble())) }
+            s.optimalCadence?.let { add(FieldValue(OPTIMAL_CADENCE_FIELD, it.toDouble())) }
+            s.wPrimeMinJ?.let {
+                add(FieldValue(WPRIME_MIN_FIELD, it))
+                add(FieldValue(MATCHES_BURNED_FIELD, s.matchesBurned.toDouble()))
+            }
+            add(FieldValue(DFA_A1_AEROBIC_FIELD, s.dfaAerobicS))
+            add(FieldValue(DFA_A1_THRESHOLD_FIELD, s.dfaThresholdS))
+            add(FieldValue(DFA_A1_HARD_FIELD, s.dfaHardS))
+            s.cardiacPopMin?.let { add(FieldValue(CARDIAC_POP_FIELD, it.toDouble())) }
+            s.quadrantPct?.let { d ->
+                add(FieldValue(QUADRANT1_FIELD, d[0]))
+                add(FieldValue(QUADRANT2_FIELD, d[1]))
+                add(FieldValue(QUADRANT3_FIELD, d[2]))
+                add(FieldValue(QUADRANT4_FIELD, d[3]))
+            }
+        }
+
         private const val MIN_AET_SAMPLES_TO_PERSIST = 60
         private const val MIN_CADENCE_SAMPLES_TO_PERSIST = 300
 
@@ -291,10 +331,9 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
      *  warning level, re-arming only once it has recovered (fresh battery). */
     private fun watchStrapBattery() {
         serviceScope.launch {
-            var warned = false
+            val alerter = StrapBatteryAlerter(LOW_BATTERY_PCT, BATTERY_RECOVERED_PCT)
             bleManager.batteryFlow.filterNotNull().collect { level ->
-                if (level <= LOW_BATTERY_PCT && !warned) {
-                    warned = true
+                if (alerter.shouldAlert(level)) {
                     karooSystem.dispatch(
                         InRideAlert(
                             id = "heartkaroo-strap-battery",
@@ -306,8 +345,6 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
                             textColor = android.R.color.white,
                         )
                     )
-                } else if (level > BATTERY_RECOVERED_PCT) {
-                    warned = false
                 }
             }
         }
@@ -430,30 +467,20 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
         val summaryJob: Job = scope.launch {
             while (isActive) {
                 delay(SESSION_SUMMARY_INTERVAL_MS)
-                ridePowerEngine.aetCurrentEstimate()?.let {
-                    emitter.onNext(WriteToSessionMesg(FieldValue(AET_FIELD, it.toDouble())))
-                }
-                ridePowerEngine.vt2CurrentEstimate()?.let {
-                    emitter.onNext(WriteToSessionMesg(FieldValue(VT2_FIELD, it.toDouble())))
-                }
-                ridePowerEngine.optimalCadenceCurrent()?.let {
-                    emitter.onNext(WriteToSessionMesg(FieldValue(OPTIMAL_CADENCE_FIELD, it.toDouble())))
-                }
-                ridePowerEngine.wPrimeMinJ()?.let {
-                    emitter.onNext(WriteToSessionMesg(FieldValue(WPRIME_MIN_FIELD, it)))
-                    emitter.onNext(WriteToSessionMesg(FieldValue(MATCHES_BURNED_FIELD, ridePowerEngine.matchesBurnedCount.toDouble())))
-                }
-                emitter.onNext(WriteToSessionMesg(FieldValue(DFA_A1_AEROBIC_FIELD, ridePowerEngine.dfaAerobicSeconds())))
-                emitter.onNext(WriteToSessionMesg(FieldValue(DFA_A1_THRESHOLD_FIELD, ridePowerEngine.dfaThresholdSeconds())))
-                emitter.onNext(WriteToSessionMesg(FieldValue(DFA_A1_HARD_FIELD, ridePowerEngine.dfaHardSeconds())))
-                ridePowerEngine.cardiacPop.value?.let {
-                    emitter.onNext(WriteToSessionMesg(FieldValue(CARDIAC_POP_FIELD, it.toDouble())))
-                }
-                ridePowerEngine.quadrantDistribution()?.let { d ->
-                    emitter.onNext(WriteToSessionMesg(FieldValue(QUADRANT1_FIELD, d[0])))
-                    emitter.onNext(WriteToSessionMesg(FieldValue(QUADRANT2_FIELD, d[1])))
-                    emitter.onNext(WriteToSessionMesg(FieldValue(QUADRANT3_FIELD, d[2])))
-                    emitter.onNext(WriteToSessionMesg(FieldValue(QUADRANT4_FIELD, d[3])))
+                val snapshot = RideSummarySnapshot(
+                    aet = ridePowerEngine.aetCurrentEstimate(),
+                    vt2 = ridePowerEngine.vt2CurrentEstimate(),
+                    optimalCadence = ridePowerEngine.optimalCadenceCurrent(),
+                    wPrimeMinJ = ridePowerEngine.wPrimeMinJ(),
+                    matchesBurned = ridePowerEngine.matchesBurnedCount,
+                    dfaAerobicS = ridePowerEngine.dfaAerobicSeconds(),
+                    dfaThresholdS = ridePowerEngine.dfaThresholdSeconds(),
+                    dfaHardS = ridePowerEngine.dfaHardSeconds(),
+                    cardiacPopMin = ridePowerEngine.cardiacPop.value,
+                    quadrantPct = ridePowerEngine.quadrantDistribution(),
+                )
+                for (field in sessionSummaryFields(snapshot)) {
+                    emitter.onNext(WriteToSessionMesg(field))
                 }
             }
         }
@@ -467,15 +494,15 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             summaryJob.cancel()
             val final = ridePowerEngine.aetCurrentEstimate()
             val samples = ridePowerEngine.aetSampleCount
-            if (final != null && samples >= MIN_AET_SAMPLES_TO_PERSIST) {
+            if (shouldPersistRollingFinal(final, samples, MIN_AET_SAMPLES_TO_PERSIST)) {
                 AerobicThresholdStore(applicationContext)
-                    .record(System.currentTimeMillis(), final, samples)
+                    .record(System.currentTimeMillis(), final!!, samples)
             }
             val cadenceFinal = ridePowerEngine.optimalCadenceCurrent()
             val cadenceSamples = ridePowerEngine.optimalCadenceSamples
-            if (cadenceFinal != null && cadenceSamples >= MIN_CADENCE_SAMPLES_TO_PERSIST) {
+            if (shouldPersistRollingFinal(cadenceFinal, cadenceSamples, MIN_CADENCE_SAMPLES_TO_PERSIST)) {
                 OptimalCadenceStore(applicationContext)
-                    .record(System.currentTimeMillis(), cadenceFinal, cadenceSamples)
+                    .record(System.currentTimeMillis(), cadenceFinal!!, cadenceSamples)
             }
         }
     }

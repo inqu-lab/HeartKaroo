@@ -26,14 +26,20 @@ jobs:
           # Robolectric's Android 16 (SDK 36) jar requires Java 21+.
           java-version: "21"
       - uses: gradle/actions/setup-gradle@v4
-      - name: Run unit tests
-        run: ./gradlew testDebugUnitTest --stacktrace
+      - name: Run unit tests with coverage
+        run: ./gradlew testDebugUnitTest koverXmlReportDebug koverHtmlReportDebug --stacktrace
       - name: Upload unit test report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: unit-test-report
           path: app/build/reports/tests/
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: app/build/reports/kover/
 
   instrumented-tests:
     name: Instrumented tests (emulator)
