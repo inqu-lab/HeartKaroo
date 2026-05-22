@@ -41,9 +41,12 @@ import io.hammerhead.karooext.models.OnConnectionStatus
 import io.hammerhead.karooext.models.OnDataPoint
 import io.hammerhead.karooext.models.RequestBluetooth
 import io.hammerhead.karooext.models.WriteToRecordMesg
+import io.hammerhead.karooext.models.WriteToSessionMesg
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.filter
@@ -78,7 +81,10 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
         val DFA_ALPHA1_FIELD = DeveloperField(
             fieldDefinitionNumber = 2,
             fitBaseTypeId = 136,
-            fieldName = "dfa_alpha1",
+            // intervals.icu recognises DFA a1 only when the developer field is
+            // named "Alpha1" (the alphaHRV Connect IQ convention) — it then
+            // computes Average DFA a1 from this 1Hz stream itself.
+            fieldName = "Alpha1",
             units = "",
         )
 
@@ -107,8 +113,98 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             units = "watts",
         )
 
+        // After-ride summary fields written to the session message so they
+        // surface as per-ride numbers (custom activity fields in intervals.icu).
+        val OPTIMAL_CADENCE_FIELD = DeveloperField(
+            fieldDefinitionNumber = 6,
+            fitBaseTypeId = 136,
+            fieldName = "optimal_cadence",
+            units = "rpm",
+        )
+
+        val WPRIME_MIN_FIELD = DeveloperField(
+            fieldDefinitionNumber = 7,
+            fitBaseTypeId = 136,
+            fieldName = "w_prime_min",
+            units = "J",
+        )
+
+        val VT2_FIELD = DeveloperField(
+            fieldDefinitionNumber = 8,
+            fitBaseTypeId = 136,
+            fieldName = "vt2_estimate",
+            units = "watts",
+        )
+
+        val DFA_A1_AEROBIC_FIELD = DeveloperField(
+            fieldDefinitionNumber = 9,
+            fitBaseTypeId = 136,
+            fieldName = "dfa_a1_aerobic_s",
+            units = "s",
+        )
+
+        val DFA_A1_THRESHOLD_FIELD = DeveloperField(
+            fieldDefinitionNumber = 10,
+            fitBaseTypeId = 136,
+            fieldName = "dfa_a1_threshold_s",
+            units = "s",
+        )
+
+        val DFA_A1_HARD_FIELD = DeveloperField(
+            fieldDefinitionNumber = 11,
+            fitBaseTypeId = 136,
+            fieldName = "dfa_a1_hard_s",
+            units = "s",
+        )
+
+        val CARDIAC_POP_FIELD = DeveloperField(
+            fieldDefinitionNumber = 12,
+            fitBaseTypeId = 136,
+            fieldName = "cardiac_pop_min",
+            units = "min",
+        )
+
+        val MATCHES_BURNED_FIELD = DeveloperField(
+            fieldDefinitionNumber = 13,
+            fitBaseTypeId = 136,
+            fieldName = "matches_burned",
+            units = "",
+        )
+
+        val QUADRANT1_FIELD = DeveloperField(
+            fieldDefinitionNumber = 14,
+            fitBaseTypeId = 136,
+            fieldName = "quadrant1_pct",
+            units = "pct",
+        )
+
+        val QUADRANT2_FIELD = DeveloperField(
+            fieldDefinitionNumber = 15,
+            fitBaseTypeId = 136,
+            fieldName = "quadrant2_pct",
+            units = "pct",
+        )
+
+        val QUADRANT3_FIELD = DeveloperField(
+            fieldDefinitionNumber = 16,
+            fitBaseTypeId = 136,
+            fieldName = "quadrant3_pct",
+            units = "pct",
+        )
+
+        val QUADRANT4_FIELD = DeveloperField(
+            fieldDefinitionNumber = 17,
+            fitBaseTypeId = 136,
+            fieldName = "quadrant4_pct",
+            units = "pct",
+        )
+
         private const val MIN_AET_SAMPLES_TO_PERSIST = 60
         private const val MIN_CADENCE_SAMPLES_TO_PERSIST = 300
+
+        // How often the after-ride session summaries are (re)written; the
+        // last write before the ride ends supplies the final values.
+        private const val SESSION_SUMMARY_INTERVAL_MS = 15_000L
 
         // Warn at/below this strap battery %, re-arming once it recovers above
         // the second threshold (so we don't alert repeatedly around the line).
@@ -317,12 +413,45 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
                     emitter.onNext(WriteToRecordMesg(FieldValue(SDNN_FIELD, sdnn.toDouble())))
                 }
         }
-        // AeT and optimal cadence accumulate in the engine (so they survive page
-        // switches); mirror the live AeT estimate into the FIT record while
-        // recording, and persist both per-ride finals from the engine on stop.
+        // Mirror the live AeT estimate into the FIT record while recording; the
+        // engine owns the calculator so it accumulates for the whole ride.
         val aetJob: Job = scope.launch {
             ridePowerEngine.aet.filterNotNull().collect { est ->
                 emitter.onNext(WriteToRecordMesg(FieldValue(AET_FIELD, est.toDouble())))
+            }
+        }
+        // Single periodic writer for the after-ride session summaries. The engine
+        // owns the calculators (they accumulate for the whole ride regardless of
+        // page); we snapshot them here. WriteToSessionMesg keeps the latest value,
+        // so the final tick before the ride ends carries the summary numbers.
+        val summaryJob: Job = scope.launch {
+            while (isActive) {
+                delay(SESSION_SUMMARY_INTERVAL_MS)
+                ridePowerEngine.aetCurrentEstimate()?.let {
+                    emitter.onNext(WriteToSessionMesg(FieldValue(AET_FIELD, it.toDouble())))
+                }
+                ridePowerEngine.vt2CurrentEstimate()?.let {
+                    emitter.onNext(WriteToSessionMesg(FieldValue(VT2_FIELD, it.toDouble())))
+                }
+                ridePowerEngine.optimalCadenceCurrent()?.let {
+                    emitter.onNext(WriteToSessionMesg(FieldValue(OPTIMAL_CADENCE_FIELD, it.toDouble())))
+                }
+                ridePowerEngine.wPrimeMinJ()?.let {
+                    emitter.onNext(WriteToSessionMesg(FieldValue(WPRIME_MIN_FIELD, it)))
+                    emitter.onNext(WriteToSessionMesg(FieldValue(MATCHES_BURNED_FIELD, ridePowerEngine.matchesBurnedCount.toDouble())))
+                }
+                emitter.onNext(WriteToSessionMesg(FieldValue(DFA_A1_AEROBIC_FIELD, ridePowerEngine.dfaAerobicSeconds())))
+                emitter.onNext(WriteToSessionMesg(FieldValue(DFA_A1_THRESHOLD_FIELD, ridePowerEngine.dfaThresholdSeconds())))
+                emitter.onNext(WriteToSessionMesg(FieldValue(DFA_A1_HARD_FIELD, ridePowerEngine.dfaHardSeconds())))
+                ridePowerEngine.cardiacPop.value?.let {
+                    emitter.onNext(WriteToSessionMesg(FieldValue(CARDIAC_POP_FIELD, it.toDouble())))
+                }
+                ridePowerEngine.quadrantDistribution()?.let { d ->
+                    emitter.onNext(WriteToSessionMesg(FieldValue(QUADRANT1_FIELD, d[0])))
+                    emitter.onNext(WriteToSessionMesg(FieldValue(QUADRANT2_FIELD, d[1])))
+                    emitter.onNext(WriteToSessionMesg(FieldValue(QUADRANT3_FIELD, d[2])))
+                    emitter.onNext(WriteToSessionMesg(FieldValue(QUADRANT4_FIELD, d[3])))
+                }
             }
         }
         emitter.setCancellable {
@@ -332,6 +461,7 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             respJob.cancel()
             sdnnJob.cancel()
             aetJob.cancel()
+            summaryJob.cancel()
             val final = ridePowerEngine.aetCurrentEstimate()
             val samples = ridePowerEngine.aetSampleCount
             if (shouldPersistRollingFinal(final, samples, MIN_AET_SAMPLES_TO_PERSIST)) {

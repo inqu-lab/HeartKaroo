@@ -7,6 +7,7 @@ import com.inqulab.heartkaroo.decoupling.CardiacPopDetector
 import com.inqulab.heartkaroo.decoupling.DecouplingCalculator
 import com.inqulab.heartkaroo.efficiency.CardiacCostCalculator
 import com.inqulab.heartkaroo.efficiency.EfficiencyFactorCalculator
+import com.inqulab.heartkaroo.hrv.DfaAlphaZoneTimer
 import com.inqulab.heartkaroo.karoo.streamDataFlow
 import com.inqulab.heartkaroo.settings.RiderSettings
 import com.inqulab.heartkaroo.wprime.WPrimeBalanceCalculator
@@ -68,6 +69,12 @@ class RidePowerEngine(
     private var quadrantCalc = QuadrantAnalysisCalculator(ftpW = settings.ftpW.toDouble())
     private var wPrimeCalc = newWPrimeCalc()
     private val mmpCalcs = mmpDurations.mapValues { (_, d) -> MmpCalculator(d) }
+
+    // After-ride summary state (snapshotted into the FIT session message).
+    private val dfaZones = DfaAlphaZoneTimer()
+    private var wPrimeMin = Double.POSITIVE_INFINITY
+    private var matchesBurned = 0
+    private var matchArmed = true
 
     private val _intensityFactor = MutableStateFlow<Float?>(null)
     val intensityFactor: StateFlow<Float?> = _intensityFactor.asStateFlow()
@@ -151,6 +158,7 @@ class RidePowerEngine(
     @Synchronized
     internal fun onAlpha(alpha: Float) {
         aetCalc.addAlpha(alpha)
+        dfaZones.add(System.currentTimeMillis(), alpha.toDouble())
         _aet.value = aetCalc.currentEstimate()
     }
 
@@ -170,7 +178,17 @@ class RidePowerEngine(
 
         _kilojoules.value = kjCalc.add(now, power)
         _coasting.value = coastingCalc.add(now, power)
-        _wPrimeBalance.value = wPrimeCalc.add(now, power)
+        val wBal = wPrimeCalc.add(now, power)
+        _wPrimeBalance.value = wBal
+        val wBalD = wBal.toDouble()
+        if (wBalD < wPrimeMin) wPrimeMin = wBalD
+        val wpJ = settings.wPrimeJ
+        if (matchArmed && wBalD < wpJ * 0.25) {
+            matchesBurned++
+            matchArmed = false
+        } else if (!matchArmed && wBalD >= wpJ * 0.30) {
+            matchArmed = true
+        }
 
         for ((id, calc) in mmpCalcs) _mmp.getValue(id).value = calc.add(now, power)
 
@@ -216,6 +234,16 @@ class RidePowerEngine(
     fun optimalCadenceCurrent(): Float? = cadenceCalc.optimalCadence()
     val optimalCadenceSamples: Int get() = cadenceCalc.totalSamples
 
+    // After-ride summary snapshots for the FIT session writer.
+    /** VT2 / second-threshold power from the AeT fit solved at DFA α1 = 0.50. */
+    fun vt2CurrentEstimate(): Float? = aetCalc.estimateForTarget(0.50)
+    @Synchronized fun wPrimeMinJ(): Double? = if (wPrimeMin.isFinite()) wPrimeMin else null
+    val matchesBurnedCount: Int @Synchronized get() = matchesBurned
+    fun dfaAerobicSeconds(): Double = dfaZones.aerobicSeconds()
+    fun dfaThresholdSeconds(): Double = dfaZones.thresholdSeconds()
+    fun dfaHardSeconds(): Double = dfaZones.hardSeconds()
+    fun quadrantDistribution(): DoubleArray? = quadrantCalc.distributionPercent()
+
     /** Reset every per-ride accumulator. Call when a new ride starts. */
     @Synchronized
     fun resetRide() {
@@ -235,6 +263,10 @@ class RidePowerEngine(
         quadrantCalc = QuadrantAnalysisCalculator(ftpW = settings.ftpW.toDouble())
         wPrimeCalc = newWPrimeCalc()
         mmpCalcs.values.forEach { it.reset() }
+        dfaZones.reset()
+        wPrimeMin = Double.POSITIVE_INFINITY
+        matchesBurned = 0
+        matchArmed = true
 
         _intensityFactor.value = null
         _variabilityIndex.value = null
