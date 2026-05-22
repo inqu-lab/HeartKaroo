@@ -83,6 +83,30 @@ class RidePowerEngineTest {
         val q = e.quadrant.value
         assertNotNull(q)
         assertTrue("quadrant should be 1..4, was $q", q!! in 1f..4f)
+
+        // The lifetime distribution feeds the after-ride session message.
+        val dist = e.quadrantDistribution()
+        assertNotNull(dist)
+        assertEquals(4, dist!!.size)
+        assertEquals(100.0, dist.sum(), 0.5)
+    }
+
+    @Test
+    fun `W-prime min and matches burned track hard efforts with re-arm hysteresis`() {
+        val e = newEngine() // CP 250 W, W′ 20 000 J (defaults)
+        var t = 0L
+
+        // First hard effort (500 W ≈ +250 W over CP): drain W′ and burn a match.
+        repeat(90) { e.onPower(t, 500.0); t += 1000L }
+        assertEquals(1, e.matchesBurnedCount)
+        assertNotNull(e.wPrimeMinJ())
+        assertTrue("W′-min should be deep into reserve", e.wPrimeMinJ()!! < 20_000 * 0.25)
+
+        // Easy spin recovers above the 30 % re-arm threshold.
+        repeat(150) { e.onPower(t, 0.0); t += 1000L }
+        // Second hard effort burns another match.
+        repeat(90) { e.onPower(t, 500.0); t += 1000L }
+        assertEquals(2, e.matchesBurnedCount)
     }
 
     @Test
@@ -102,6 +126,10 @@ class RidePowerEngineTest {
 
         assertNotNull("AeT should resolve with a clear negative slope", e.aet.value)
         assertTrue("AeT estimate in a sane range, was ${e.aet.value}", e.aet.value!! in 50f..400f)
+        assertTrue("paired sample count exposed for persistence", e.aetSampleCount >= 60)
+        // VT2 reuses the same fit solved at α1 = 0.50 (a lower α1 -> higher power).
+        assertNotNull("VT2 should resolve from the same fit", e.vt2CurrentEstimate())
+        assertEquals(e.aet.value!!, e.aetCurrentEstimate()!!, 1e-3f)
     }
 
     @Test
