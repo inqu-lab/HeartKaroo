@@ -41,4 +41,21 @@ class QuadrantAnalysisCalculatorTest {
         for (i in 0..30) calc.add(i * 1000L, 100.0, 70.0)
         assertEquals(3, calc.dominantQuadrant())
     }
+
+    @Test
+    fun `distribution is null before any sample`() {
+        assertNull(QuadrantAnalysisCalculator(ftpW = 270.0).distributionPercent())
+    }
+
+    @Test
+    fun `distribution reports cumulative share per quadrant`() {
+        val calc = QuadrantAnalysisCalculator(ftpW = 270.0)
+        repeat(30) { i -> calc.add(i * 1000L, 350.0, 50.0) }            // Q2
+        repeat(10) { i -> calc.add((100 + i) * 1000L, 150.0, 110.0) }   // Q4
+        val d = calc.distributionPercent()!!
+        assertEquals(0.0, d[0], 1e-9)
+        assertEquals(75.0, d[1], 1e-9)
+        assertEquals(0.0, d[2], 1e-9)
+        assertEquals(25.0, d[3], 1e-9)
+    }
 }

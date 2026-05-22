@@ -54,7 +54,7 @@ Recorded alongside the standard HR record when the strap is active:
 |---|---|
 | `hrv_rmssd` | ms |
 | `hrv_stress_pct` | pct |
-| `dfa_alpha1` | (dimensionless) |
+| `Alpha1` | (dimensionless) |
 | `respiratory_rate` | brpm |
 | `sdnn` | ms |
 | `aet_estimate` | watts |
@@ -62,8 +62,34 @@ Recorded alongside the standard HR record when the strap is active:
 `respiratory_rate` is also tagged with the native FIT record respiration
 field number (108), so apps that understand it (intervals.icu, Garmin
 Connect) read it as real respiration instead of an opaque custom stream.
+
+The DFA α1 field is named `Alpha1` (the alphaHRV Connect IQ convention)
+because that is the exact name intervals.icu looks for — it then computes
+"Average DFA a1" from the stream itself.
+
 The rest have no native FIT equivalent and appear as named developer
 fields (intervals.icu surfaces them under Custom Streams).
+
+**Per-ride summary (session message).** Written once to the ride's
+session message, so they show up as after-ride numbers (custom activity
+fields in intervals.icu) rather than 1 Hz streams:
+
+| FIT field | Units | Meaning |
+|---|---|---|
+| `aet_estimate` | watts | Final aerobic-threshold estimate (DFA α1 = 0.75). |
+| `vt2_estimate` | watts | Second-threshold estimate from the same fit (DFA α1 = 0.50). |
+| `optimal_cadence` | rpm | Best-efficiency cadence (highest W per beat). |
+| `w_prime_min` | J | Lowest W′ balance reached — depth into anaerobic reserve. |
+| `matches_burned` | — | Count of fresh dips below 25% W′ (re-armed above 30%). |
+| `dfa_a1_aerobic_s` | s | Time with DFA α1 ≥ 0.75 (below LT1). |
+| `dfa_a1_threshold_s` | s | Time with 0.50 ≤ DFA α1 &lt; 0.75 (between LT1 and LT2). |
+| `dfa_a1_hard_s` | s | Time with DFA α1 &lt; 0.50 (above LT2). |
+| `cardiac_pop_min` | min | Minute at which Pw:Hr decoupling first sustained above 5%. |
+| `quadrant1_pct` … `quadrant4_pct` | pct | Share of ride time in each Coggan quadrant. |
+
+These are written periodically to the session message (latest value
+wins), so they need power/HR/cadence and an active strap to populate;
+fields without enough data are simply absent.
 
 The other secondary HRV metrics (pNN50, SD1/SD2, ectopic rate) are
 derivable post-ride from the recorded RR data, so they stay as

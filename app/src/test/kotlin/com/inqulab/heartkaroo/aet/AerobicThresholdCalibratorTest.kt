@@ -48,6 +48,19 @@ class AerobicThresholdCalibratorTest {
     }
 
     @Test
+    fun `estimateForTarget solves the same fit for other thresholds`() {
+        // α(P) = 1.5 - 0.005 * P  =>  α = 0.75 at 150 W, α = 0.50 at 200 W
+        val calc = AerobicThresholdCalibrator(minSamples = 50, powerSmoothingMs = 1_000L)
+        feed(
+            calc, 200,
+            powerFn = { i -> 50.0 + i.toDouble() },
+            alphaFn = { i -> (1.5 - 0.005 * (50.0 + i)).toFloat() },
+        )
+        assertEquals(150f, calc.estimateForTarget(0.75)!!, 3f)
+        assertEquals(200f, calc.estimateForTarget(0.50)!!, 3f)
+    }
+
+    @Test
     fun `flat alpha gives no estimate`() {
         val calc = AerobicThresholdCalibrator(minSamples = 50, powerSmoothingMs = 1_000L)
         feed(calc, 200, { i -> 100.0 + i }, { 0.8f })
