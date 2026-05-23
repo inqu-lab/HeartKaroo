@@ -208,8 +208,28 @@ hysteresis (`StrapBatteryAlerter`) and the ride-stop persistence gate
 
 The in-app screens (`MainActivity`, `ReadinessActivity`,
 `SettingsActivity`) are covered by Robolectric tests for their on-launch
-rendering and input handling; the 2-minute BLE measurement loop and the
-`KarooExtension` service / `PolarBleManager` lifecycle still need a device.
+rendering and input handling.
+
+### On-device (Karoo) tests
+
+```bash
+./gradlew connectedDebugAndroidTest
+```
+
+Some integration points can only run against the real Karoo runtime / BLE
+hardware — the `KarooSystemService` binder handshake (Robolectric's fake
+`bindService` delivers a null binder, which the SDK rejects), live data
+streams, and the Polar strap. The `androidTest` suite covers these:
+
+- `KarooSystemServiceInstrumentedTest` — the system connects and the power
+  stream delivers a `StreamState`.
+- `RidePowerEngineInstrumentedTest` — the engine accumulates kJ from live
+  power (skips without an active ride).
+- `PolarBleManagerInstrumentedTest` — scans for and streams HR from a real
+  strap (skips without one in range).
+
+Tests that need a ride or a strap `assumeTrue`-skip when the precondition
+is absent, so the suite still passes on a bare Karoo.
 
 ### Coverage
 
