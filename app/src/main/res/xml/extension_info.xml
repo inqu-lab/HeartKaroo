@@ -171,7 +171,7 @@
         typeId="quadrant"
         displayName="@string/quadrant_name"
         description="@string/quadrant_description"
-        graphical="false"
+        graphical="true"
         sampleRate="1000" />
 
     <DataType
