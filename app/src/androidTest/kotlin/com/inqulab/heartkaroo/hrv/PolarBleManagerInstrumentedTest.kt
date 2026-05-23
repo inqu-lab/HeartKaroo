@@ -8,9 +8,11 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
 import com.inqulab.heartkaroo.awaitFlow
 import com.inqulab.heartkaroo.firstDevice
+import com.inqulab.heartkaroo.isEmulator
 import org.junit.After
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeFalse
 import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
@@ -40,8 +42,10 @@ class PolarBleManagerInstrumentedTest {
 
     @Before
     fun requireBluetooth() {
+        // Skip before touching the Polar SDK at all on the emulator/CI.
+        assumeFalse("needs a real BLE radio; skipped on the emulator", isEmulator())
         val adapter = (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
-        assumeTrue("needs an enabled Bluetooth adapter (skipped on the emulator)", adapter?.isEnabled == true)
+        assumeTrue("needs an enabled Bluetooth adapter", adapter?.isEnabled == true)
         ble = PolarBleManager.getInstance(context)
     }
 

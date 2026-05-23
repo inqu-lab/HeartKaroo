@@ -5,13 +5,16 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.inqulab.heartkaroo.awaitFlow
 import com.inqulab.heartkaroo.connectBlocking
+import com.inqulab.heartkaroo.isEmulator
 import io.hammerhead.karooext.KarooSystemService
 import io.hammerhead.karooext.models.DataType
 import io.hammerhead.karooext.models.StreamState
 import org.junit.After
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeFalse
 import org.junit.Assume.assumeTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -30,6 +33,11 @@ class KarooSystemServiceInstrumentedTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
     private var karoo: KarooSystemService? = null
+
+    @Before
+    fun requireKarooHardware() {
+        assumeFalse("needs a real Karoo; skipped on the emulator", isEmulator())
+    }
 
     @After
     fun tearDown() {

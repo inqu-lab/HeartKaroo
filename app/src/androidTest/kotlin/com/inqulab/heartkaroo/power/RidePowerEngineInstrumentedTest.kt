@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.inqulab.heartkaroo.awaitFlow
 import com.inqulab.heartkaroo.connectBlocking
+import com.inqulab.heartkaroo.isEmulator
 import com.inqulab.heartkaroo.karoo.streamDataFlow
 import com.inqulab.heartkaroo.settings.RiderSettings
 import io.hammerhead.karooext.KarooSystemService
@@ -17,7 +18,9 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.After
 import org.junit.Assert.assertNotNull
+import org.junit.Assume.assumeFalse
 import org.junit.Assume.assumeTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -34,6 +37,11 @@ class RidePowerEngineInstrumentedTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var karoo: KarooSystemService? = null
+
+    @Before
+    fun requireKarooHardware() {
+        assumeFalse("needs a real Karoo; skipped on the emulator", isEmulator())
+    }
 
     @After
     fun tearDown() {

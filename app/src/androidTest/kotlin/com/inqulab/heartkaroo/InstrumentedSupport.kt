@@ -1,5 +1,6 @@
 package com.inqulab.heartkaroo
 
+import android.os.Build
 import com.inqulab.heartkaroo.hrv.PolarBleManager
 import io.hammerhead.karooext.KarooSystemService
 import kotlinx.coroutines.flow.Flow
@@ -16,6 +17,25 @@ import java.util.concurrent.atomic.AtomicReference
  * when the precondition — a Karoo connection, an active ride, a strap in
  * range — isn't present, rather than hanging or failing.
  */
+
+/**
+ * True on an Android emulator (incl. the CI `connectedDebugAndroidTest`
+ * runner). These tests need real Karoo / BLE hardware, so they skip up front
+ * on an emulator instead of hanging on a connection that never comes or
+ * touching the Polar SDK on a device with no real radio.
+ */
+fun isEmulator(): Boolean {
+    val fp = Build.FINGERPRINT ?: ""
+    return fp.startsWith("generic") ||
+        fp.startsWith("unknown") ||
+        fp.contains("generic") ||
+        Build.MODEL.contains("Emulator") ||
+        Build.MODEL.contains("Android SDK built for") ||
+        Build.MANUFACTURER.contains("Genymotion") ||
+        Build.PRODUCT.contains("sdk") ||
+        Build.HARDWARE.contains("goldfish") ||
+        Build.HARDWARE.contains("ranchu")
+}
 
 /** Block until the Karoo system service reports connected, or time out. */
 fun KarooSystemService.connectBlocking(timeoutSec: Long = 8): Boolean {
