@@ -1,6 +1,7 @@
 package com.inqulab.heartkaroo.hrv
 
 import android.Manifest
+import android.bluetooth.BluetoothManager
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -11,6 +12,7 @@ import org.junit.After
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -18,8 +20,13 @@ import org.junit.runner.RunWith
 /**
  * Hardware integration on the Karoo: scan for and stream from a real Polar H10
  * (or any standard BLE HRM). Requires a powered strap in range — worn, for the
- * HR test. Both tests skip (assumeTrue) when no strap is found so the suite
- * still passes on a bare Karoo.
+ * HR test.
+ *
+ * Every test first `assumeTrue`-skips unless an enabled Bluetooth adapter is
+ * present (the CI emulator has none), so the Polar SDK is never even
+ * initialised there; the strap-dependent assertions skip again when nothing is
+ * in range. The suite therefore passes on a bare emulator and on a Karoo
+ * without a strap, and only truly exercises the radio on a Karoo with one.
  */
 @RunWith(AndroidJUnit4::class)
 class PolarBleManagerInstrumentedTest {
@@ -29,30 +36,38 @@ class PolarBleManagerInstrumentedTest {
         GrantPermissionRule.grant(Manifest.permission.ACCESS_FINE_LOCATION)
 
     private val context: Context = ApplicationProvider.getApplicationContext()
-    private val ble: PolarBleManager by lazy { PolarBleManager.getInstance(context) }
+    private var ble: PolarBleManager? = null
+
+    @Before
+    fun requireBluetooth() {
+        val adapter = (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
+        assumeTrue("needs an enabled Bluetooth adapter (skipped on the emulator)", adapter?.isEnabled == true)
+        ble = PolarBleManager.getInstance(context)
+    }
 
     @After
     fun tearDown() {
-        ble.disconnect()
+        ble?.disconnect()
     }
 
     @Test
     fun scanDiscoversAStrap() {
-        val device = ble.firstDevice()
+        val device = ble!!.firstDevice()
         assumeTrue("needs a powered BLE HRM in range", device != null)
         assertTrue("a discovered device must carry an address", device!!.id.isNotBlank())
     }
 
     @Test
     fun connectsAndStreamsHeartRate() {
-        val device = ble.firstDevice()
+        val mgr = ble!!
+        val device = mgr.firstDevice()
         assumeTrue("needs a BLE HRM in range", device != null)
 
-        ble.connect(device!!.id)
-        val connected = awaitFlow(15_000, ble.connectedFlow) { it }
+        mgr.connect(device!!.id)
+        val connected = awaitFlow(15_000, mgr.connectedFlow) { it }
         assumeTrue("the strap should connect", connected != null)
 
-        val hr = awaitFlow(15_000, ble.events()) { it is PolarBleManager.BleEvent.Heartrate }
+        val hr = awaitFlow(15_000, mgr.events()) { it is PolarBleManager.BleEvent.Heartrate }
         assertNotNull("a worn strap should stream heart rate", hr)
     }
 }
