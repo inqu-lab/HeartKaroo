@@ -60,6 +60,10 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
     companion object {
         const val EXTENSION_ID = "heartkaroo"
 
+        // uid of the always-present virtual sensor entry (listed without a BLE
+        // scan so it's pairable before the Nearby-devices permission is granted).
+        const val VIRTUAL_HR_UID = "heartkaroo-hr"
+
         // Reserve the BT radio once per process. Re-requesting on every service
         // recreate (e.g. at ride start) risks cycling the radio and dropping the
         // strap, and we never release it — the reservation lives with the process.
@@ -242,33 +246,54 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
     }
 
     override fun startScan(emitter: Emitter<Device>) {
-        val stop = bleManager.startDeviceScan { device ->
-            emitter.onNext(
-                Device(
-                    extension = EXTENSION_ID,
-                    uid = device.id,
-                    dataTypes = listOf(DataType.Type.HEART_RATE),
-                    // Suffix so this entry is distinguishable from Karoo's own
-                    // native HR pairing of the same strap. Pair THIS one only —
-                    // it provides both HR and HRV from the single H10 connection
-                    // (the strap allows only one BLE link at a time).
-                    displayName = "${device.name} (HR+HRV)",
-                )
+        // Always list a virtual entry first, so the strap is pairable even before
+        // the Nearby-devices permission is granted — a real BLE scan needs that
+        // permission and this Service can't prompt for it, which otherwise leaves
+        // Karoo's Sensors list empty. connectDevice resolves the virtual entry to a
+        // real strap. (Same trick as the veloVigil extension.)
+        emitter.onNext(
+            Device(
+                extension = EXTENSION_ID,
+                uid = VIRTUAL_HR_UID,
+                dataTypes = listOf(DataType.Type.HEART_RATE),
+                displayName = "HeartKaroo (HR+HRV)",
             )
-        }
-        emitter.setCancellable { stop() }
+        )
+        // Also run a real scan so, once permission is granted, the rider can pick a
+        // specific strap by name. With no permission this simply finds nothing.
+        val stop = runCatching {
+            bleManager.startDeviceScan { device ->
+                emitter.onNext(
+                    Device(
+                        extension = EXTENSION_ID,
+                        uid = device.id,
+                        dataTypes = listOf(DataType.Type.HEART_RATE),
+                        // Suffix so this entry is distinguishable from Karoo's own
+                        // native HR pairing of the same strap. Pair a HeartKaroo
+                        // entry — it provides both HR and HRV from one H10 link.
+                        displayName = "${device.name} (HR+HRV)",
+                    )
+                )
+            }
+        }.getOrNull()
+        emitter.setCancellable { stop?.invoke() }
     }
 
     override fun connectDevice(uid: String, emitter: Emitter<DeviceEvent>) {
-        // Remember the strap the rider paired in Karoo's Sensors section so the
-        // Readiness screen reuses it instead of scanning for the first one found.
-        RiderSettings(applicationContext).pairedStrapMac = uid
         emitter.onNext(OnConnectionStatus(ConnectionStatus.SEARCHING))
-        // Open (or reuse) the link; it's owned by the manager, so cancelling this
-        // emitter below won't drop the strap. Karoo recreates this emitter across
-        // lifecycle changes (e.g. at ride start) — tearing the link down on each
-        // cancel was disconnecting the strap mid-ride.
-        bleManager.ensureConnected(uid)
+        // The link is owned by the manager, so cancelling this emitter won't drop
+        // the strap. Karoo recreates the emitter across lifecycle changes (e.g. at
+        // ride start) — tearing the link down on each cancel dropped it mid-ride.
+        val settings = RiderSettings(applicationContext)
+        if (uid == VIRTUAL_HR_UID) {
+            // Virtual entry: reconnect the remembered strap, else connect the first
+            // one found and remember it (so future connects reuse the same strap).
+            bleManager.connectStrap(settings.pairedStrapMac) { mac -> settings.pairedStrapMac = mac }
+        } else {
+            // A specific strap the rider picked from the scanned list.
+            settings.pairedStrapMac = uid
+            bleManager.ensureConnected(uid)
+        }
         val job: Job = CoroutineScope(Dispatchers.IO).launch {
             // connectedFlow is a StateFlow, so it always replays the current link
             // state to a freshly-recreated emitter (the event stream below carries
