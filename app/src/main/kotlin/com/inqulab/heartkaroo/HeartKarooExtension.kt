@@ -1,5 +1,9 @@
 package com.inqulab.heartkaroo
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
 import com.inqulab.heartkaroo.aet.AerobicThresholdDataType
 import com.inqulab.heartkaroo.aet.AerobicThresholdStore
 import com.inqulab.heartkaroo.cadence.OptimalCadenceDataType
@@ -40,6 +44,7 @@ import io.hammerhead.karooext.models.InRideAlert
 import io.hammerhead.karooext.models.OnConnectionStatus
 import io.hammerhead.karooext.models.OnDataPoint
 import io.hammerhead.karooext.models.RequestBluetooth
+import io.hammerhead.karooext.models.SystemNotification
 import io.hammerhead.karooext.models.WriteToRecordMesg
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -182,10 +187,33 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
                 bluetoothRequested = true
                 karooSystem.dispatch(RequestBluetooth(EXTENSION_ID))
             }
+            // The Sensors-section scan runs in this Service, which can't prompt for
+            // runtime permissions. If they're missing, nudge the rider to open the
+            // app (MainActivity requests them) so the strap becomes findable.
+            if (connected && !hasBlePermissions()) {
+                karooSystem.dispatch(
+                    SystemNotification(
+                        "heartkaroo-ble-permission",
+                        getString(R.string.ble_permission_notification),
+                        action = getString(R.string.ble_permission_notification_action),
+                        actionIntent = "com.inqulab.heartkaroo.MAIN",
+                    ),
+                )
+            }
         }
         ridePowerEngine.start()
         watchStrapBattery()
     }
+
+    private fun hasBlePermissions(): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            granted(Manifest.permission.BLUETOOTH_SCAN) && granted(Manifest.permission.BLUETOOTH_CONNECT)
+        } else {
+            granted(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+
+    private fun granted(perm: String): Boolean =
+        ContextCompat.checkSelfPermission(this, perm) == PackageManager.PERMISSION_GRANTED
 
     /** Raises a single in-ride alert when the strap battery first drops to the
      *  warning level, re-arming only once it has recovered (fresh battery). */
@@ -232,6 +260,9 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
     }
 
     override fun connectDevice(uid: String, emitter: Emitter<DeviceEvent>) {
+        // Remember the strap the rider paired in Karoo's Sensors section so the
+        // Readiness screen reuses it instead of scanning for the first one found.
+        RiderSettings(applicationContext).pairedStrapMac = uid
         emitter.onNext(OnConnectionStatus(ConnectionStatus.SEARCHING))
         // Open (or reuse) the link; it's owned by the manager, so cancelling this
         // emitter below won't drop the strap. Karoo recreates this emitter across

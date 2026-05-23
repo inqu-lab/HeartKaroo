@@ -34,6 +34,13 @@ class RiderSettings(context: Context) {
         get() = prefs.getFloat(KEY_WEIGHT, DEFAULT_WEIGHT)
         set(v) { prefs.edit().putFloat(KEY_WEIGHT, v).apply() }
 
+    /** BT MAC of the strap the rider paired in Karoo's Sensors section (set when
+     *  Karoo connects it). The Readiness screen reuses it instead of grabbing the
+     *  first strap a scan happens to find. */
+    var pairedStrapMac: String?
+        get() = prefs.getString(KEY_PAIRED_MAC, null)
+        set(v) { prefs.edit().putString(KEY_PAIRED_MAC, v).apply() }
+
     companion object {
         const val DEFAULT_FTP = 270
         const val DEFAULT_CP = 250
@@ -46,5 +53,6 @@ class RiderSettings(context: Context) {
         private const val KEY_WPRIME = "wprime_j"
         private const val KEY_HRMAX = "hr_max"
         private const val KEY_WEIGHT = "weight_kg"
+        private const val KEY_PAIRED_MAC = "paired_strap_mac"
     }
 }
