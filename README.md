@@ -231,6 +231,10 @@ streams, and the Polar strap. The `androidTest` suite covers these:
 Tests that need a ride or a strap `assumeTrue`-skip when the precondition
 is absent, so the suite still passes on a bare Karoo.
 
+CI runs only the JVM/Robolectric tests; this suite is not in CI because a
+generic emulator has no Karoo runtime or BLE radio. Run it by hand against
+a Karoo over ADB.
+
 ### Coverage
 
 ```bash
