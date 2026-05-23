@@ -1,16 +1,14 @@
 package com.inqulab.heartkaroo.hrv
 
 import android.content.Context
-import android.widget.RemoteViews
-import com.inqulab.heartkaroo.R
+import com.inqulab.heartkaroo.karoo.Zone
+import com.inqulab.heartkaroo.karoo.buildZoneView
+import com.inqulab.heartkaroo.karoo.startZoneView
 import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.internal.Emitter
 import io.hammerhead.karooext.internal.ViewEmitter
 import io.hammerhead.karooext.models.StreamState
 import io.hammerhead.karooext.models.ViewConfig
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import java.util.Locale
 
 /**
@@ -29,9 +27,6 @@ class DfaAlpha1DataType(
 
     companion object {
         const val TYPE_ID = "dfa_alpha1"
-
-        // Shown while warming up (DFA α1 needs ~2 min of beats) or with no strap.
-        private const val NEUTRAL_COLOR = 0xFF424242.toInt()
     }
 
     override fun startStream(emitter: Emitter<StreamState>) {
@@ -43,36 +38,16 @@ class DfaAlpha1DataType(
 
     override fun startView(context: Context, config: ViewConfig, emitter: ViewEmitter) {
         if (config.preview) {
-            val zone = DfaZone.LT1_TO_LT2
-            emitter.updateView(view(context, "0.62", zone.label, zone.color))
+            val z = zoneOf(0.62f)
+            emitter.updateView(buildZoneView(context, format(0.62f), z.label, z.color))
             emitter.setCancellable {}
             return
         }
-        val scope = CoroutineScope(Dispatchers.Default.limitedParallelism(1))
-        val job = scope.launch {
-            bleManager.dfaAlpha1Flow.collect { alpha ->
-                val rv = if (alpha != null) {
-                    val zone = classifyDfaZone(alpha.toDouble())
-                    view(context, formatAlpha(alpha), zone.label, zone.color)
-                } else {
-                    view(context, "--", "DFA α1", NEUTRAL_COLOR)
-                }
-                emitter.updateView(rv)
-            }
-        }
-        emitter.setCancellable { job.cancel() }
+        startZoneView(context, bleManager.dfaAlpha1Flow, emitter, "DFA α1", ::format, ::zoneOf)
     }
 
-    private fun view(
-        context: Context,
-        value: String,
-        label: String,
-        color: Int,
-    ): RemoteViews = RemoteViews(context.packageName, R.layout.dfa_alpha1_field).apply {
-        setTextViewText(R.id.dfa_value, value)
-        setTextViewText(R.id.dfa_label, label)
-        setInt(R.id.dfa_root, "setBackgroundColor", color)
-    }
+    private fun format(alpha: Float): String = String.format(Locale.US, "%.2f", alpha)
 
-    private fun formatAlpha(alpha: Float): String = String.format(Locale.US, "%.2f", alpha)
+    private fun zoneOf(alpha: Float): Zone =
+        classifyDfaZone(alpha.toDouble()).let { Zone(it.label, it.color) }
 }
