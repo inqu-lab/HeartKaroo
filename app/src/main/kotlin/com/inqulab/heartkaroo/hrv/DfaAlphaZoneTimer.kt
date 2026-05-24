@@ -14,8 +14,8 @@ package com.inqulab.heartkaroo.hrv
  * (e.g. a strap dropout or a pause) are not attributed to any band.
  */
 class DfaAlphaZoneTimer(
-    private val aerobicMin: Double = 0.75,
-    private val thresholdMin: Double = 0.50,
+    private val aerobicMin: Double = DFA_LT1_ALPHA,
+    private val thresholdMin: Double = DFA_LT2_ALPHA,
     private val maxGapMs: Long = 10_000L,
 ) {
     private var lastTimeMs: Long = -1L

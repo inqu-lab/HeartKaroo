@@ -10,7 +10,7 @@
         typeId="decoupling"
         displayName="@string/decoupling_name"
         description="@string/decoupling_description"
-        graphical="false"
+        graphical="true"
         sampleRate="1000"
         unitName="%" />
 
@@ -25,7 +25,7 @@
         typeId="hrv_stress"
         displayName="@string/hrv_stress_name"
         description="@string/hrv_stress_description"
-        graphical="false"
+        graphical="true"
         unitName="%"
         icon="@drawable/ic_hrv" />
 
@@ -33,7 +33,7 @@
         typeId="dfa_alpha1"
         displayName="@string/dfa_alpha1_name"
         description="@string/dfa_alpha1_description"
-        graphical="false"
+        graphical="true"
         icon="@drawable/ic_hrv" />
 
     <DataType
@@ -95,7 +95,7 @@
         typeId="pace_hr_decoupling"
         displayName="@string/pa_hr_decoupling_name"
         description="@string/pa_hr_decoupling_description"
-        graphical="false"
+        graphical="true"
         sampleRate="1000"
         unitName="%" />
 
@@ -110,7 +110,7 @@
         typeId="w_prime_balance"
         displayName="@string/w_prime_balance_name"
         description="@string/w_prime_balance_description"
-        graphical="false"
+        graphical="true"
         sampleRate="1000"
         unitName="J" />
 
@@ -141,7 +141,7 @@
         typeId="intensity_factor"
         displayName="@string/intensity_factor_name"
         description="@string/intensity_factor_description"
-        graphical="false"
+        graphical="true"
         sampleRate="1000" />
 
     <DataType
@@ -171,7 +171,7 @@
         typeId="quadrant"
         displayName="@string/quadrant_name"
         description="@string/quadrant_description"
-        graphical="false"
+        graphical="true"
         sampleRate="1000" />
 
     <DataType

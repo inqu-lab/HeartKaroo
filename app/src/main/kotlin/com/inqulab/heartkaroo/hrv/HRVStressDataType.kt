@@ -1,8 +1,14 @@
 package com.inqulab.heartkaroo.hrv
 
+import android.content.Context
+import com.inqulab.heartkaroo.karoo.buildZoneView
+import com.inqulab.heartkaroo.karoo.startZoneView
 import io.hammerhead.karooext.extension.DataTypeImpl
 import io.hammerhead.karooext.internal.Emitter
+import io.hammerhead.karooext.internal.ViewEmitter
 import io.hammerhead.karooext.models.StreamState
+import io.hammerhead.karooext.models.ViewConfig
+import java.util.Locale
 
 /**
  * Custom data field exposed to Karoo as "HRV Stress %".
@@ -25,4 +31,16 @@ class HRVStressDataType(
         )
         emitter.setCancellable { cancel() }
     }
+
+    override fun startView(context: Context, config: ViewConfig, emitter: ViewEmitter) {
+        if (config.preview) {
+            val z = hrvStressZone(45f)
+            emitter.updateView(buildZoneView(context, format(45f), z.label, z.color))
+            emitter.setCancellable {}
+            return
+        }
+        startZoneView(context, bleManager.stressFlow, emitter, "Stress", ::format, ::hrvStressZone)
+    }
+
+    private fun format(stressPercent: Float): String = String.format(Locale.US, "%.0f%%", stressPercent)
 }
