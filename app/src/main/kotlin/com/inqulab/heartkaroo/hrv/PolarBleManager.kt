@@ -253,6 +253,24 @@ class PolarBleManager private constructor(private val context: Context) {
     /** The shared connection/HR event stream, decoupled from the link lifecycle. */
     fun events(): Flow<BleEvent> = events.asSharedFlow()
 
+    /** Connect the rider's strap when only a virtual sensor entry was paired (no
+     *  MAC chosen from a scan): reconnect [preferredMac] if known, otherwise scan
+     *  and connect the first Polar found, reporting its MAC via [onResolvedMac] so
+     *  the caller can remember it and reuse the same strap next time. */
+    fun connectStrap(preferredMac: String?, onResolvedMac: (String) -> Unit) {
+        if (preferredMac != null) {
+            ensureConnected(preferredMac)
+            return
+        }
+        var stop: (() -> Unit)? = null
+        stop = startDeviceScan { device ->
+            stop?.invoke()
+            stop = null
+            onResolvedMac(device.id)
+            ensureConnected(device.id)
+        }
+    }
+
     /** Idempotently open the link to [macAddress]. (Re)claims the shared SDK
      *  callback for this manager and only issues a connect when the strap
      *  changes, so a repeat call for the same strap is a no-op that won't bounce

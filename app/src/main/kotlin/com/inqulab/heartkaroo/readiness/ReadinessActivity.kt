@@ -14,6 +14,7 @@ import com.inqulab.heartkaroo.R
 import com.inqulab.heartkaroo.aet.AerobicThresholdStore
 import com.inqulab.heartkaroo.cadence.OptimalCadenceStore
 import com.inqulab.heartkaroo.hrv.PolarBleManager
+import com.inqulab.heartkaroo.settings.RiderSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -44,7 +45,6 @@ class ReadinessActivity : AppCompatActivity() {
     private lateinit var startButton: Button
     private var measurementJob: Job? = null
     private var connectionJob: Job? = null
-    private var stopScan: (() -> Unit)? = null
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -117,20 +117,23 @@ class ReadinessActivity : AppCompatActivity() {
 
     @Suppress("MissingPermission")
     private fun startMeasurement() {
-        startButton.isEnabled = false
-        statusView.text = getString(R.string.readiness_scanning)
-        verdictView.text = ""
-        stopScan = bleManager.startDeviceScan { device ->
-            stopScan?.invoke(); stopScan = null
-            statusView.text = getString(R.string.readiness_connecting_fmt, device.name)
-            beginConnection(device)
+        // Use the strap paired in Karoo's Sensors section, not a scan that could
+        // grab the first (wrong) strap nearby.
+        val mac = RiderSettings(applicationContext).pairedStrapMac
+        if (mac == null) {
+            statusView.text = getString(R.string.readiness_no_paired_strap)
+            return
         }
+        startButton.isEnabled = false
+        verdictView.text = ""
+        statusView.text = getString(R.string.readiness_connecting)
+        beginConnection(mac)
     }
 
-    private fun beginConnection(device: PolarBleManager.DiscoveredDevice) {
+    private fun beginConnection(mac: String) {
         connectionJob = lifecycleScope.launch(Dispatchers.IO) {
             try {
-                bleManager.connect(device.id).collect { /* keep flow alive */ }
+                bleManager.connect(mac).collect { /* keep flow alive */ }
             } catch (_: SecurityException) {
                 withContext(Dispatchers.Main) {
                     statusView.text = getString(R.string.readiness_permissions_required)
@@ -179,7 +182,6 @@ class ReadinessActivity : AppCompatActivity() {
     private fun stopMeasurement() {
         measurementJob?.cancel(); measurementJob = null
         connectionJob?.cancel(); connectionJob = null
-        stopScan?.invoke(); stopScan = null
         // Don't disconnect: the strap link is a process-wide singleton shared with
         // the extension service, which needs it during the ride. Closing this
         // screen just stops our collectors; the link stays up.
