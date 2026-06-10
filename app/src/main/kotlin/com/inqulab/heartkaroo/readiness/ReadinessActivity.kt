@@ -18,6 +18,7 @@ import com.inqulab.heartkaroo.settings.RiderSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -126,7 +127,9 @@ class ReadinessActivity : AppCompatActivity() {
         }
         startButton.isEnabled = false
         verdictView.text = ""
-        statusView.text = getString(R.string.readiness_connecting)
+        // Name the strap being connected so the rider can spot a wrong (e.g. a
+        // ride mate's) strap before the 2-minute reading starts.
+        statusView.text = getString(R.string.readiness_connecting_fmt, mac)
         beginConnection(mac)
     }
 
@@ -142,6 +145,10 @@ class ReadinessActivity : AppCompatActivity() {
             }
         }
         measurementJob = lifecycleScope.launch(Dispatchers.Main) {
+            val name = withContext(Dispatchers.IO) {
+                bleManager.connectedDeviceNameFlow.filterNotNull().first()
+            }
+            statusView.text = getString(R.string.readiness_connected_fmt, name)
             withContext(Dispatchers.IO) { bleManager.rmssdFlow.first { it > 0f } }
             val startedAt = System.currentTimeMillis()
             val samples = mutableListOf<Float>()

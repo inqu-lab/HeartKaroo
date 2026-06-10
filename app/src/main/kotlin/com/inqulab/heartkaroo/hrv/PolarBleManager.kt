@@ -183,6 +183,12 @@ class PolarBleManager private constructor(private val context: Context) {
     private val _batteryFlow = MutableStateFlow<Int?>(null)
     val batteryFlow: StateFlow<Int?> = _batteryFlow.asStateFlow()
 
+    /** Advertised name of the strap currently connected (e.g. "Polar H10
+     *  B36B5B2C"), or null while searching/disconnected. Lets the rider confirm
+     *  the RIGHT strap is connected when several are nearby. */
+    private val _connectedDeviceNameFlow = MutableStateFlow<String?>(null)
+    val connectedDeviceNameFlow: StateFlow<String?> = _connectedDeviceNameFlow.asStateFlow()
+
     /** Whether the strap currently has good skin contact (true when the strap
      *  doesn't report contact at all). HRV is not computed while contact is lost. */
     private val _contactOkFlow = MutableStateFlow(true)
@@ -316,6 +322,7 @@ class PolarBleManager private constructor(private val context: Context) {
         disconnectedAt = 0L
         if (connectingMac != null) {
             _connectedFlow.value = false
+            _connectedDeviceNameFlow.value = null
             _batteryFlow.value = null
             resetHrvCalculators()
         }
@@ -337,6 +344,7 @@ class PolarBleManager private constructor(private val context: Context) {
         connectingMac = null
         activeDeviceId = null
         _connectedFlow.value = false
+        _connectedDeviceNameFlow.value = null
         resetHrvCalculators()
     }
 
@@ -372,6 +380,8 @@ class PolarBleManager private constructor(private val context: Context) {
                     return
                 }
                 activeDeviceId = polarDeviceInfo.deviceId
+                _connectedDeviceNameFlow.value =
+                    polarDeviceInfo.name.ifBlank { polarDeviceInfo.deviceId }
                 // A reconnect landed within the grace window — cancel the pending
                 // "really disconnected" flip so fields never flickered.
                 reconnectGraceJob?.cancel()
@@ -404,6 +414,7 @@ class PolarBleManager private constructor(private val context: Context) {
                 reconnectGraceJob = managerScope.launch {
                     delay(RECONNECT_GRACE_MS)
                     _connectedFlow.value = false
+                    _connectedDeviceNameFlow.value = null
                     clearHrvOutputs()
                     events.tryEmit(BleEvent.Disconnected)
                     reconnectGraceJob = null

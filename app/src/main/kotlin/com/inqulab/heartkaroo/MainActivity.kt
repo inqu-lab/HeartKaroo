@@ -6,11 +6,16 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.widget.Button
+import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import com.inqulab.heartkaroo.hrv.PolarBleManager
 import com.inqulab.heartkaroo.readiness.ReadinessActivity
+import com.inqulab.heartkaroo.settings.RiderSettings
 import com.inqulab.heartkaroo.settings.SettingsActivity
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
@@ -29,6 +34,27 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<Button>(R.id.open_settings).setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
+        }
+        watchStrapStatus()
+    }
+
+    /** Live "which strap am I connected to?" line, so the rider can confirm the
+     *  RIGHT strap is linked when several are nearby. The BLE link is process-wide
+     *  (PolarBleManager singleton, driven by the extension service), so this
+     *  screen only observes it. */
+    private fun watchStrapStatus() {
+        val statusView = findViewById<TextView>(R.id.strap_status)
+        val settings = RiderSettings(applicationContext)
+        val bleManager = PolarBleManager.getInstance(applicationContext)
+        lifecycleScope.launch {
+            bleManager.connectedDeviceNameFlow.collect { name ->
+                val pairedMac = settings.pairedStrapMac
+                statusView.text = when {
+                    name != null -> getString(R.string.strap_status_connected, name)
+                    pairedMac != null -> getString(R.string.strap_status_searching, pairedMac)
+                    else -> getString(R.string.strap_status_none)
+                }
+            }
         }
     }
 

@@ -100,8 +100,8 @@
     <string name="readiness_body">Take a 2-minute resting reading with your H10 before clipping in. Compared against your rolling 7-day average to suggest whether to go hard or take it easy.\n\nSit still, breathe normally, and don\'t talk.</string>
     <string name="readiness_start">Start 2-minute reading</string>
     <string name="readiness_scanning">Scanning for HR strap…</string>
-    <string name="readiness_connecting">Connecting to your strap…</string>
     <string name="readiness_connecting_fmt">Connecting to %1$s…</string>
+    <string name="readiness_connected_fmt">Connected to %1$s — waiting for heartbeats…</string>
     <string name="readiness_no_paired_strap">Pair your strap under Karoo\'s Sensors first, then come back.</string>
     <string name="readiness_measuring_fmt">Measuring… %1$d / %2$d s</string>
     <string name="readiness_too_few_samples">Not enough samples collected. Check the strap and try again.</string>
@@ -117,6 +117,10 @@
 
     <string name="ble_permission_notification">HeartKaroo needs Bluetooth permission to find your strap. Open the app to grant it.</string>
     <string name="ble_permission_notification_action">Open</string>
+
+    <string name="strap_status_connected">✓ Strap connected: %1$s</string>
+    <string name="strap_status_searching">Paired strap %1$s not connected — searching…</string>
+    <string name="strap_status_none">No strap paired yet — pair one under Karoo\'s Sensors.</string>
 
     <string name="settings_button">Edit rider settings</string>
     <string name="settings_title">Rider Settings</string>
