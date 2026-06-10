@@ -248,6 +248,34 @@ service / `PolarBleManager` lifecycle still need a real device.
 A single instrumented test (`ReadinessStoreInstrumentedTest`) runs on a
 device/emulator via `./gradlew connectedDebugAndroidTest`.
 
+### Karoo emulator
+
+`KarooEmulator` (test sources, `emulator/`) emulates everything the
+extension normally gets from hardware: the Karoo's power / HR / cadence /
+speed / elevation-gain streams and the Polar strap's RR-interval stream —
+so a whole ride can be exercised end-to-end with no Karoo, trainer or
+strap. The rider model is physiologically shaped: HR follows power with a
+lag plus cardiac drift, and the RR stream carries respiratory sinus
+arrhythmia, a Mayer-wave oscillation and beat noise that all shrink and
+whiten with intensity (so RMSSD collapses and DFA α1 falls from ~1.0
+toward 0.5 as the ride gets harder), plus occasional premature-beat
+artifacts for the artifact corrector and ectopic counter to chew on.
+
+`KarooEmulatorTest` drives the default 59-minute ride (warmup, 4×1-min
+VO2 intervals with coasting, a long endurance block, a 6 % climb,
+cooldown) through the real `RidePowerEngine` and the real HRV pipeline
+(`EmulatedStrapPipeline` replicates `PolarBleManager`'s exact wiring),
+asserts every data field ends up at a plausible physiological value, and
+writes the end-of-ride values of all fields to a readable report at
+`app/build/reports/karoo-emulator/ride-report.txt`:
+
+```bash
+./gradlew :app:testDebugUnitTest --tests 'com.inqulab.heartkaroo.emulator.KarooEmulatorTest'
+```
+
+The ride is deterministic for a given seed; pass a custom seed, FTP or
+phase list to `KarooEmulator(...)` to emulate other rides.
+
 ### Coverage
 
 ```bash
