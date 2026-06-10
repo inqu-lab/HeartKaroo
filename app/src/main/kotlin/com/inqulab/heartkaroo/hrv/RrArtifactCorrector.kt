@@ -28,6 +28,10 @@ class RrArtifactCorrector(
     private val decisions = ArrayDeque<Boolean>() // true = rejected as artifact
 
     /** Returns the RR to feed the DFA window, or null if it's an artifact. */
+    // Synchronized like the sibling RR calculators: intervals arrive on the
+    // RxJava computation thread while reset() runs from BLE callbacks and
+    // disconnect paths on other threads.
+    @Synchronized
     fun accept(rrMs: Int): Int? {
         if (recent.isEmpty()) {
             recent.addLast(rrMs)
@@ -58,11 +62,13 @@ class RrArtifactCorrector(
 
     /** Fraction of recent beats rejected as artifacts (0..1) over [rateWindow].
      *  DFA α1 is unreliable once this is more than a few percent. */
+    @Synchronized
     fun recentArtifactRate(): Double {
         if (decisions.isEmpty()) return 0.0
         return decisions.count { it }.toDouble() / decisions.size
     }
 
+    @Synchronized
     fun reset() {
         recent.clear()
         consecutiveRejections = 0

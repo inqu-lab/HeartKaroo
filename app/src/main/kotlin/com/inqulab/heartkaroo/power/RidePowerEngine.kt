@@ -50,9 +50,11 @@ class RidePowerEngine(
         "mmp_60min" to 60L * 60 * 1000,
     )
 
-    // IF and VI share a 60-min Normalized Power window; TSS is cumulative (4 h).
+    // IF and VI share a 60-min Normalized Power window; TSS is cumulative over
+    // the whole ride (a windowed NP capped it at the window length and let it
+    // shrink as hard early riding scrolled out — TSS can only grow).
     private val npCalc = NormalizedPowerCalculator()
-    private val npTss = NormalizedPowerCalculator(windowMs = 4 * 60 * 60 * 1000L)
+    private val npTss = CumulativeNormalizedPowerCalculator()
     private val kjCalc = KilojoulesCalculator()
     private val coastingCalc = CoastingCalculator()
     private val efCalc = EfficiencyFactorCalculator()

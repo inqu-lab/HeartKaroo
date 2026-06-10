@@ -15,6 +15,7 @@ import com.inqulab.heartkaroo.aet.AerobicThresholdStore
 import com.inqulab.heartkaroo.cadence.OptimalCadenceStore
 import com.inqulab.heartkaroo.hrv.PolarBleManager
 import com.inqulab.heartkaroo.settings.RiderSettings
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * "Pre-ride HRV readiness" screen.
@@ -137,16 +139,35 @@ class ReadinessActivity : AppCompatActivity() {
         connectionJob = lifecycleScope.launch(Dispatchers.IO) {
             try {
                 bleManager.connect(mac).collect { /* keep flow alive */ }
-            } catch (_: SecurityException) {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // SecurityException = missing BLE permission; anything else is the
+                // BLE stack failing (Bluetooth off, adapter unavailable). Show a
+                // status instead of crashing the process.
                 withContext(Dispatchers.Main) {
-                    statusView.text = getString(R.string.readiness_permissions_required)
+                    statusView.text =
+                        if (e is SecurityException) getString(R.string.readiness_permissions_required)
+                        else getString(R.string.readiness_connection_error)
                     startButton.isEnabled = true
+                    measurementJob?.cancel(); measurementJob = null
                 }
             }
         }
         measurementJob = lifecycleScope.launch(Dispatchers.Main) {
+            // Don't wait forever with the button disabled when the strap isn't in
+            // range — the link is manager-owned, so a late connect still lands and
+            // the next Start succeeds immediately.
             val name = withContext(Dispatchers.IO) {
-                bleManager.connectedDeviceNameFlow.filterNotNull().first()
+                withTimeoutOrNull(CONNECT_TIMEOUT_MS) {
+                    bleManager.connectedDeviceNameFlow.filterNotNull().first()
+                }
+            }
+            if (name == null) {
+                statusView.text = getString(R.string.readiness_strap_not_found)
+                startButton.isEnabled = true
+                connectionJob?.cancel(); connectionJob = null
+                return@launch
             }
             statusView.text = getString(R.string.readiness_connected_fmt, name)
             withContext(Dispatchers.IO) { bleManager.rmssdFlow.first { it > 0f } }
@@ -167,8 +188,11 @@ class ReadinessActivity : AppCompatActivity() {
                 return@launch
             }
             val avg = samples.average().toFloat()
-            store.record(System.currentTimeMillis(), avg)
+            // Verdict BEFORE recording: today's reading must be z-scored against
+            // the prior baseline, not a baseline it is itself part of (which pulls
+            // the mean toward today and biases verdicts toward NORMAL).
             renderVerdict(avg)
+            store.record(System.currentTimeMillis(), avg)
             startButton.isEnabled = true
         }
     }
@@ -196,5 +220,6 @@ class ReadinessActivity : AppCompatActivity() {
 
     private companion object {
         const val MEASUREMENT_MS = 2L * 60 * 1000
+        const val CONNECT_TIMEOUT_MS = 30_000L
     }
 }

@@ -37,6 +37,24 @@ class HeartRateMeasurementTest {
     }
 
     @Test
+    fun `skips the Energy Expended field before the RR intervals`() {
+        // flags=0x18 (uint8 HR + Energy Expended + RR), bpm=60, EE=4660 kJ
+        // (LE: 0x34 0x12), RR raw=819 (~799 ms). Without the EE skip the EE
+        // bytes were decoded as a bogus first RR and the real RR misread.
+        val parsed = parseHeartRateMeasurement(bytes(0x18, 60, 0x34, 0x12, 0x33, 0x03))
+        assertEquals(60, parsed!!.bpm)
+        assertEquals(listOf(799), parsed.rrIntervalsMs)
+    }
+
+    @Test
+    fun `skips Energy Expended after a 16-bit HR too`() {
+        // flags=0x19 (uint16 HR + EE + RR), bpm=300, EE, RR raw=819
+        val parsed = parseHeartRateMeasurement(bytes(0x19, 0x2C, 0x01, 0x34, 0x12, 0x33, 0x03))
+        assertEquals(300, parsed!!.bpm)
+        assertEquals(listOf(799), parsed.rrIntervalsMs)
+    }
+
+    @Test
     fun `parses 8-bit HR with one RR interval converted from 1 over 1024s units`() {
         // flags=0x10 (uint8 HR + RR present), bpm=60, RR raw=819 (~800 ms)
         // 819 * 1000 / 1024 = 799

@@ -39,4 +39,17 @@ class VamCalculatorTest {
         // < 10 s span
         assertNull(calc.current())
     }
+
+    @Test
+    fun `a stream stall restarts the window instead of spanning the gap`() {
+        val calc = VamCalculator(windowMs = 60_000L)
+        // Steady 6000 m/h climb, then the elevation stream stalls for 10 min
+        // during which 100 m was climbed. Bridging the stall reported the
+        // climb diluted over the gap (~600 m/h); the window must restart.
+        calc.add(0L, 100.0)
+        calc.add(30_000L, 150.0)
+        assertNull(calc.add(630_000L, 250.0))
+        // And once fresh post-gap samples span ≥ 10 s, VAM resumes from them.
+        assertEquals(6000f, calc.add(660_000L, 300.0)!!, 50f)
+    }
 }

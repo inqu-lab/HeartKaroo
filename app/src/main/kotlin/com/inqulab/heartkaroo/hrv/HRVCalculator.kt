@@ -6,12 +6,17 @@ class HRVCalculator(private val windowSize: Int = 30) {
 
     private val rrIntervals = ArrayDeque<Int>()
 
+    // Synchronized like the sibling RR calculators: intervals arrive on the
+    // RxJava computation thread while reset() runs from BLE callbacks and
+    // disconnect paths on other threads.
+    @Synchronized
     fun addInterval(rrMs: Int) {
         if (rrMs < 300 || rrMs > 2000) return
         rrIntervals.addLast(rrMs)
         if (rrIntervals.size > windowSize) rrIntervals.removeFirst()
     }
 
+    @Synchronized
     fun getRmssd(): Float {
         if (rrIntervals.size < 2) return 0f
         var sumSquaredDiffs = 0.0
@@ -24,5 +29,6 @@ class HRVCalculator(private val windowSize: Int = 30) {
 
     val hasData: Boolean get() = rrIntervals.size >= 2
 
+    @Synchronized
     fun reset() { rrIntervals.clear() }
 }

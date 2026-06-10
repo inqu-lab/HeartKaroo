@@ -25,6 +25,17 @@ class KilojoulesCalculatorTest {
     }
 
     @Test
+    fun `a sensor dropout adds no phantom work`() {
+        val calc = KilojoulesCalculator()
+        // 600 s at 250 W = 150 kJ, then the power meter goes silent for 10
+        // minutes. The first sample after the gap must not integrate across it
+        // (that credited a phantom 150 kJ at the pre-gap power).
+        for (s in 0..600) calc.add(s * 1000L, 250.0)
+        calc.add(1_200_000L, 250.0)
+        assertEquals(150f, calc.current(), 1f)
+    }
+
+    @Test
     fun `reset zeroes the total`() {
         val calc = KilojoulesCalculator()
         for (s in 0..600) calc.add(s * 1000L, 200.0)

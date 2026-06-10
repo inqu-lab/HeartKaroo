@@ -345,6 +345,7 @@ class PolarBleManager private constructor(private val context: Context) {
         activeDeviceId = null
         _connectedFlow.value = false
         _connectedDeviceNameFlow.value = null
+        _batteryFlow.value = null
         resetHrvCalculators()
     }
 

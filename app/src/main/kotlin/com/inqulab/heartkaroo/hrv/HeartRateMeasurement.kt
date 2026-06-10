@@ -20,6 +20,7 @@ fun parseHeartRateMeasurement(data: ByteArray): HeartRateMeasurement? {
 
     val flags = data[0].toInt() and 0xFF
     val hr16bit = flags and 0x01 != 0
+    val energyExpendedPresent = flags and 0x08 != 0
     val rrPresent = flags and 0x10 != 0
 
     val bpm = if (hr16bit) {
@@ -31,7 +32,10 @@ fun parseHeartRateMeasurement(data: ByteArray): HeartRateMeasurement? {
 
     val rrs = if (rrPresent) {
         val out = ArrayList<Int>()
-        var offset = if (hr16bit) 3 else 2
+        // Per the HRS spec, a uint16 Energy Expended field (flag bit 3) sits
+        // between the HR value and the RR intervals; skip it or the RRs are
+        // read two bytes off.
+        var offset = (if (hr16bit) 3 else 2) + (if (energyExpendedPresent) 2 else 0)
         while (offset + 1 < data.size) {
             val rrRaw = ((data[offset + 1].toInt() and 0xFF) shl 8) or (data[offset].toInt() and 0xFF)
             out += rrRaw * 1000 / 1024

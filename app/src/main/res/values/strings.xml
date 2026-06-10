@@ -114,6 +114,8 @@
     <string name="readiness_no_history">No history yet — today\'s reading will start your baseline.</string>
     <string name="readiness_history_fmt">7-day baseline: %1$d readings, avg %2$.1f ms</string>
     <string name="readiness_permissions_required">Bluetooth permission is required to read the strap.</string>
+    <string name="readiness_connection_error">Couldn\'t reach the strap — check Bluetooth and try again.</string>
+    <string name="readiness_strap_not_found">Couldn\'t find your strap — is it worn and in range?</string>
 
     <string name="ble_permission_notification">HeartKaroo needs Bluetooth permission to find your strap. Open the app to grant it.</string>
     <string name="ble_permission_notification_action">Open</string>

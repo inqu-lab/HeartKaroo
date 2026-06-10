@@ -36,6 +36,20 @@ class EctopicDetectorTest {
     }
 
     @Test
+    fun `a sustained baseline shift re-syncs instead of flagging every beat`() {
+        val det = EctopicDetector()
+        // Steady 800 ms, then the stream resumes after a surge at 620 ms
+        // (>20 % off the stale reference). Without re-sync every post-shift
+        // beat stayed flagged against 800 ms — a heart-rate-sized ~52/min
+        // "ectopic" rate for minutes. Only the first few may flag.
+        repeat(40) { det.addInterval(800) }
+        repeat(60) { det.addInterval(620) }
+        val rate = det.getEventsPerMin()
+        assertNotNull(rate)
+        assertTrue("expected re-synced low rate, got $rate", rate!! < 5f)
+    }
+
+    @Test
     fun `small deviations are not flagged`() {
         val det = EctopicDetector(windowSize = 60, thresholdFrac = 0.20)
         // 800 → 920 is 15% jump → below threshold → not flagged
