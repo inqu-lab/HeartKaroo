@@ -16,6 +16,7 @@ class MainActivityTest {
         val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
         activity.findViewById<Button>(R.id.open_readiness).performClick()
         activity.findViewById<Button>(R.id.open_settings).performClick()
+        activity.findViewById<Button>(R.id.open_emulator).performClick()
         // Robolectric records the intents; both clicks should have launched something.
         assertNotNull(shadowOf(activity).nextStartedActivity)
     }

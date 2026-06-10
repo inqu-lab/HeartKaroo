@@ -45,6 +45,11 @@
             android:label="@string/settings_title"
             android:windowSoftInputMode="adjustResize" />
 
+        <activity
+            android:name=".emulator.EmulatorActivity"
+            android:exported="false"
+            android:label="@string/emulator_title" />
+
         <service
             android:name=".HeartKarooExtension"
             android:exported="true"

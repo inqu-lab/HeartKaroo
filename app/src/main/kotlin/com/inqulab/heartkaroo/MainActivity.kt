@@ -9,6 +9,7 @@ import android.widget.Button
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import com.inqulab.heartkaroo.emulator.EmulatorActivity
 import com.inqulab.heartkaroo.readiness.ReadinessActivity
 import com.inqulab.heartkaroo.settings.SettingsActivity
 
@@ -29,6 +30,9 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<Button>(R.id.open_settings).setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
+        }
+        findViewById<Button>(R.id.open_emulator).setOnClickListener {
+            startActivity(Intent(this, EmulatorActivity::class.java))
         }
     }
 

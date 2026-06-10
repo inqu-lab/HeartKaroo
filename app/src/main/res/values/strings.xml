@@ -118,8 +118,7 @@
     <string name="ble_permission_notification">HeartKaroo needs Bluetooth permission to find your strap. Open the app to grant it.</string>
     <string name="ble_permission_notification_action">Open</string>
 
-    <string name="settings_button">Edit rider settings</string>
-    <string name="settings_title">Rider Settings</string>
+    <string name="settings_button">Edit rider settings</string>    <string name="settings_title">Rider Settings</string>
     <string name="settings_body">These values feed Intensity Factor / TSS (FTP), W′ balance (CP and W′), and future power-to-weight fields. Defaults are reasonable starting values; tune them once you know your numbers.</string>
     <string name="settings_ftp_label">FTP (W)</string>
     <string name="settings_ftp_hint">50 – 600</string>
@@ -140,6 +139,19 @@
     <string name="settings_err_wprime">W′ must be between %1$d and %2$d J</string>
     <string name="settings_err_hrmax">HR max must be between %1$d and %2$d bpm</string>
     <string name="settings_err_weight">Weight must be between %1$.0f and %2$.0f kg</string>
+
+    <string name="emulator_button">Open ride simulator (no sensors needed)</string>
+    <string name="emulator_title">Ride Simulator</string>
+    <string name="emulator_body">Plays a built-in 59-minute ride (warmup, VO₂ intervals, endurance, a 6% climb, cooldown) through the real metric engine and HRV pipeline with emulated power, HR, cadence, speed, elevation and strap RR data — watch every data field compute without a ride, trainer or strap. Uses your FTP from Rider Settings.</string>
+    <string name="emulator_start">Start</string>
+    <string name="emulator_pause">Pause</string>
+    <string name="emulator_resume">Resume</string>
+    <string name="emulator_restart">Restart</string>
+    <string name="emulator_speed_fmt">Speed: %1$d×</string>
+    <string name="emulator_ready_fmt">Ready — %1$s ride</string>
+    <string name="emulator_progress_fmt">%1$s / %2$s</string>
+    <string name="emulator_finished_fmt">Finished — %1$s</string>
+    <string name="emulator_streams_fmt">%1$d W  %2$d bpm  %3$d rpm  %4$.1f km/h</string>
 
     <string name="intro_title">HeartKaroo</string>
     <string name="intro_body">This app adds three data fields to your Karoo:\n\n• Pw:Hr Decoupling — % drift between the first and second half of the last 30 min of riding (Friel method). &lt; 5% means well-coupled aerobic effort. Field reads — for the first 10 min while the window fills.\n\n• HRV (RMSSD) — real-time heart rate variability in ms, read directly from a Polar H10 over Bluetooth. Pair the strap under Sensors first.\n\n• HRV Stress % — live HRV compared against a rolling 20-min baseline. Reads — for the first 5 min while the baseline settles, then higher numbers mean HRV is depressed vs your in-ride trend.\n\nOn your Karoo:\n1. Edit a ride profile page\n2. Add a data field\n3. Pick \"Pw:Hr Decoupling\", \"HRV (RMSSD)\", or \"HRV Stress %\" under Extensions</string>

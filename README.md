@@ -122,6 +122,12 @@ live-display-only.
   max, and weight. These feed Intensity Factor / TSS (FTP), W′ balance (CP
   and W′), and any future power-to-weight fields. Range-validated on save,
   with a "Reset to defaults" button.
+- **Ride Simulator** (`EmulatorActivity`) — plays the built-in emulated
+  ride (see [Karoo emulator](#karoo-emulator)) through the real metric
+  engine and HRV pipeline and shows every data field updating live, with
+  pause/resume and selectable playback speed (1–60×). Works on any Android
+  device — no ride, trainer or strap needed. Uses the FTP from Rider
+  Settings.
 
 ## How it works
 
@@ -237,8 +243,9 @@ Most of the suite is pure-Kotlin or runs on the JVM via
   `OptimalCadenceStore`, and `RiderSettings` exercise real
   `SharedPreferences`: record/read round-trips, the 7- and 90-day window
   eviction, input validation, defaults, and tolerance of malformed values.
-- **Screens (Robolectric)** — `MainActivity`, `ReadinessActivity`, and
-  `SettingsActivity` cover on-launch rendering and input handling.
+- **Screens (Robolectric)** — `MainActivity`, `ReadinessActivity`,
+  `SettingsActivity`, and `EmulatorActivity` cover on-launch rendering and
+  input handling.
 
 `HeartRateMeasurementTest` still covers the standalone `0x2A37` payload
 parser, but that parser is no longer on the live HRV path (the Polar SDK
@@ -250,11 +257,11 @@ device/emulator via `./gradlew connectedDebugAndroidTest`.
 
 ### Karoo emulator
 
-`KarooEmulator` (test sources, `emulator/`) emulates everything the
-extension normally gets from hardware: the Karoo's power / HR / cadence /
-speed / elevation-gain streams and the Polar strap's RR-interval stream —
-so a whole ride can be exercised end-to-end with no Karoo, trainer or
-strap. The rider model is physiologically shaped: HR follows power with a
+`KarooEmulator` (`emulator/`) emulates everything the extension normally
+gets from hardware: the Karoo's power / HR / cadence / speed /
+elevation-gain streams and the Polar strap's RR-interval stream — so a
+whole ride can be exercised end-to-end with no Karoo, trainer or strap.
+The rider model is physiologically shaped: HR follows power with a
 lag plus cardiac drift, and the RR stream carries respiratory sinus
 arrhythmia, a Mayer-wave oscillation and beat noise that all shrink and
 whiten with intensity (so RMSSD collapses and DFA α1 falls from ~1.0
@@ -275,6 +282,10 @@ writes the end-of-ride values of all fields to a readable report at
 
 The ride is deterministic for a given seed; pass a custom seed, FTP or
 phase list to `KarooEmulator(...)` to emulate other rides.
+
+The same emulator also has a GUI: the **Ride Simulator** screen
+(`EmulatorActivity`, reachable from the intro screen) plays the ride at
+1–60× and shows every data field updating live on-device.
 
 ### Coverage
 
@@ -351,6 +362,10 @@ app/src/main/kotlin/com/inqulab/heartkaroo/
 │   ├── OptimalCadenceCalculator.kt     Per-bin W/HR efficiency
 │   ├── OptimalCadenceStore.kt          SharedPreferences rolling history
 │   └── OptimalCadenceDataType.kt       Live optimal-cadence field
+├── emulator/
+│   ├── KarooEmulator.kt                Emulated Karoo streams + strap RR over a synthetic ride
+│   ├── EmulatedStrapPipeline.kt        PolarBleManager's HRV wiring, fed from emulated RRs
+│   └── EmulatorActivity.kt             Ride Simulator screen (live playback GUI)
 ├── settings/
 │   ├── RiderSettings.kt                FTP / CP / W′ / HRmax / weight prefs
 │   └── SettingsActivity.kt             Edit-rider-settings screen
