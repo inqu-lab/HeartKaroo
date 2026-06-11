@@ -12,6 +12,9 @@ package com.inqulab.heartkaroo.power
 class CoastingCalculator(
     private val coastWatts: Double = 5.0,
     private val minWarmupMs: Long = 60_000L,
+    // A gap longer than this (sensor dropout, ride pause) isn't riding time:
+    // crediting it to the pre-gap coasting state would skew the percentage.
+    private val maxGapMs: Long = 10_000L,
 ) {
     private var startMs: Long = -1L
     private var lastTimeMs: Long = -1L
@@ -23,7 +26,7 @@ class CoastingCalculator(
     fun add(timeMs: Long, power: Double): Float? {
         if (!power.isFinite()) return current()
         if (startMs < 0L) startMs = timeMs
-        if (lastTimeMs >= 0L && timeMs > lastTimeMs) {
+        if (lastTimeMs >= 0L && timeMs > lastTimeMs && timeMs - lastTimeMs <= maxGapMs) {
             val dt = timeMs - lastTimeMs
             totalMs += dt
             if (lastCoasting) coastingMs += dt

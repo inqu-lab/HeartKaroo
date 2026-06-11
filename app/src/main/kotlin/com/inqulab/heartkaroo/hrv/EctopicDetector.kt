@@ -18,20 +18,34 @@ import kotlin.math.abs
 class EctopicDetector(
     private val windowSize: Int = 120,
     private val thresholdFrac: Double = 0.20,
+    private val maxConsecutiveFlags: Int = 4,
 ) {
     private data class Beat(val rrMs: Int, val flagged: Boolean)
 
     private val window = ArrayDeque<Beat>()
     private var prevAccepted: Int = -1
+    private var consecutiveFlags = 0
 
     @Synchronized
     fun addInterval(rrMs: Int) {
         if (rrMs < 300 || rrMs > 2000) return
-        val flagged = if (prevAccepted < 0) false
+        var flagged = if (prevAccepted < 0) false
         else abs(rrMs - prevAccepted) > prevAccepted * thresholdFrac
+        if (flagged && ++consecutiveFlags >= maxConsecutiveFlags) {
+            // A sustained run of deviations is a genuine baseline shift (hard
+            // surge, stream resuming after a dropout), not minutes of ectopy:
+            // re-sync the reference instead of flagging every beat against a
+            // stale one. (Same re-sync RrArtifactCorrector uses.)
+            flagged = false
+            consecutiveFlags = 0
+            prevAccepted = rrMs
+        }
         window.addLast(Beat(rrMs, flagged))
         if (window.size > windowSize) window.removeFirst()
-        if (!flagged) prevAccepted = rrMs
+        if (!flagged) {
+            consecutiveFlags = 0
+            prevAccepted = rrMs
+        }
     }
 
     /**
@@ -55,5 +69,6 @@ class EctopicDetector(
     fun reset() {
         window.clear()
         prevAccepted = -1
+        consecutiveFlags = 0
     }
 }

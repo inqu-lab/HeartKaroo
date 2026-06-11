@@ -24,6 +24,14 @@
             android:textSize="14sp"
             android:lineSpacingMultiplier="1.2" />
 
+        <TextView
+            android:id="@+id/strap_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
         <Button
             android:id="@+id/open_readiness"
             android:layout_width="match_parent"

@@ -31,4 +31,18 @@ class CoastingCalculatorTest {
         // Total ≈ 120 s, half coasting → ~50%
         assertEquals(50f, calc.current()!!, 2f)
     }
+
+    @Test
+    fun `a sensor dropout is not credited to the pre-gap state`() {
+        val calc = CoastingCalculator(coastWatts = 5.0, minWarmupMs = 30_000L)
+        var t = 0L
+        // 60 s pedalling, 60 s coasting, then a 10-minute dropout, then 120 s
+        // pedalling. The gap must not count as 600 s of "coasting" (which read
+        // ~79 %); true split is 60 s coasting of 240 s riding = 25 %.
+        for (s in 0 until 60) { calc.add(t, 200.0); t += 1000L }
+        for (s in 0 until 60) { calc.add(t, 0.0); t += 1000L }
+        t += 600_000L
+        for (s in 0 until 120) { calc.add(t, 200.0); t += 1000L }
+        assertEquals(25f, calc.current()!!, 2f)
+    }
 }

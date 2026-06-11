@@ -8,7 +8,14 @@ package com.inqulab.heartkaroo.climb
  * climbing. Negative values (descents) are clamped to 0 — VAM
  * conventionally only counts ascent.
  */
-class VamCalculator(private val windowMs: Long = 60_000L) {
+class VamCalculator(
+    private val windowMs: Long = 60_000L,
+    // A stall in the elevation stream longer than the window restarts it:
+    // bridging the gap computed a rate over the whole stall (diluted, or a
+    // one-sample spike if a climb happened during it). Sparse-but-regular
+    // samples within the window length stay valid.
+    private val maxGapMs: Long = windowMs,
+) {
 
     private data class Sample(val timeMs: Long, val elevM: Double)
 
@@ -17,6 +24,7 @@ class VamCalculator(private val windowMs: Long = 60_000L) {
     @Synchronized
     fun add(timeMs: Long, elevationM: Double): Float? {
         if (!elevationM.isFinite()) return current()
+        window.lastOrNull()?.let { if (timeMs - it.timeMs > maxGapMs) window.clear() }
         window.addLast(Sample(timeMs, elevationM))
         val cutoff = timeMs - windowMs
         while (window.size > 2 && window.first().timeMs < cutoff) window.removeFirst()

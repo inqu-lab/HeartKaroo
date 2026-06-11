@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.Collections
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Wraps Polar's official BLE SDK so the Karoo extension talks to the H10
@@ -111,6 +112,12 @@ class PolarBleManager private constructor(private val context: Context) {
     private var hrDisposable: Disposable? = null
     @Volatile
     private var connectingMac: String? = null
+    // Polar device id (e.g. "B36B5B2C") of the strap we are connected to, captured
+    // from deviceConnected. Callbacks that identify the device only by this id
+    // (bleSdkFeatureReady, batteryLevelReceived) are filtered against it so a
+    // different strap nearby can't feed us its data.
+    @Volatile
+    private var activeDeviceId: String? = null
     private var disconnectedAt = 0L
 
     // Process-scoped (the manager is a singleton): defers the "really
@@ -175,6 +182,12 @@ class PolarBleManager private constructor(private val context: Context) {
     /** Strap battery level in percent, or null until reported. */
     private val _batteryFlow = MutableStateFlow<Int?>(null)
     val batteryFlow: StateFlow<Int?> = _batteryFlow.asStateFlow()
+
+    /** Advertised name of the strap currently connected (e.g. "Polar H10
+     *  B36B5B2C"), or null while searching/disconnected. Lets the rider confirm
+     *  the RIGHT strap is connected when several are nearby. */
+    private val _connectedDeviceNameFlow = MutableStateFlow<String?>(null)
+    val connectedDeviceNameFlow: StateFlow<String?> = _connectedDeviceNameFlow.asStateFlow()
 
     /** Whether the strap currently has good skin contact (true when the strap
      *  doesn't report contact at all). HRV is not computed while contact is lost. */
@@ -262,12 +275,23 @@ class PolarBleManager private constructor(private val context: Context) {
             ensureConnected(preferredMac)
             return
         }
+        // The scan callback runs on an IO thread and can fire before startDeviceScan
+        // returns (or once per strap when several are nearby). Single-shot guard so
+        // only the FIRST strap found is connected and remembered — without it each
+        // discovery re-issued ensureConnected with a different MAC, bouncing the
+        // link between straps and overwriting the remembered one.
+        val picked = AtomicBoolean(false)
         var stop: (() -> Unit)? = null
         stop = startDeviceScan { device ->
+            if (!picked.compareAndSet(false, true)) return@startDeviceScan
             stop?.invoke()
             stop = null
             onResolvedMac(device.id)
             ensureConnected(device.id)
+        }
+        if (picked.get()) {
+            stop?.invoke()
+            stop = null
         }
     }
 
@@ -284,8 +308,24 @@ class PolarBleManager private constructor(private val context: Context) {
         // process shares one API across the service and the Readiness screen, so
         // (re)claim it for whichever manager is currently driving the link.
         api.setApiCallback(apiCallback)
-        if (connectingMac == macAddress) return
+        if (connectingMac.equals(macAddress, ignoreCase = true)) return
         connectingMac?.let { old -> runCatching { api.disconnectFromDevice(old) } }
+        // Switching straps: drop everything tied to the old one. Its pending
+        // grace job must not blank the new link, its HR stream must not keep
+        // feeding us, and the HRV windows must not mix RR intervals from two
+        // different straps (hearts).
+        reconnectGraceJob?.cancel()
+        reconnectGraceJob = null
+        hrDisposable?.dispose()
+        hrDisposable = null
+        activeDeviceId = null
+        disconnectedAt = 0L
+        if (connectingMac != null) {
+            _connectedFlow.value = false
+            _connectedDeviceNameFlow.value = null
+            _batteryFlow.value = null
+            resetHrvCalculators()
+        }
         connectingMac = macAddress
         runCatching { api.connectToDevice(macAddress) }
     }
@@ -302,7 +342,10 @@ class PolarBleManager private constructor(private val context: Context) {
         hrDisposable = null
         connectingMac?.let { mac -> runCatching { api.disconnectFromDevice(mac) } }
         connectingMac = null
+        activeDeviceId = null
         _connectedFlow.value = false
+        _connectedDeviceNameFlow.value = null
+        _batteryFlow.value = null
         resetHrvCalculators()
     }
 
@@ -318,12 +361,28 @@ class PolarBleManager private constructor(private val context: Context) {
         _dfaAlpha1Flow.value = null
     }
 
-    // The SDK identifies the device in callbacks by its Polar device id
-    // (e.g. "B36B5B2C"), NOT the BT MAC we connect with, so we don't match on the
-    // MAC here. Only one strap is connected at a time.
+    // Every callback is filtered to the strap we asked for: connect/disconnect
+    // events carry the BT MAC ([PolarDeviceInfo.address]) and are matched against
+    // [connectingMac]; the id-only callbacks (bleSdkFeatureReady,
+    // batteryLevelReceived) are matched against [activeDeviceId], captured on
+    // connect. Without this, another HRM nearby — a neighbour's strap the SDK
+    // auto-reconnects, or the previous strap after a switch — could kill our HR
+    // stream, blank the fields via the grace job, or feed us its data.
+    private fun isTargetStrap(info: PolarDeviceInfo): Boolean =
+        info.address.equals(connectingMac, ignoreCase = true)
+
     private val apiCallback: PolarBleApiCallback by lazy {
         object : PolarBleApiCallback() {
             override fun deviceConnected(polarDeviceInfo: PolarDeviceInfo) {
+                if (!isTargetStrap(polarDeviceInfo)) {
+                    // Not the strap we want (e.g. the SDK auto-reconnected an old
+                    // one). Drop the link so it doesn't shadow the right strap.
+                    runCatching { api.disconnectFromDevice(polarDeviceInfo.address) }
+                    return
+                }
+                activeDeviceId = polarDeviceInfo.deviceId
+                _connectedDeviceNameFlow.value =
+                    polarDeviceInfo.name.ifBlank { polarDeviceInfo.deviceId }
                 // A reconnect landed within the grace window — cancel the pending
                 // "really disconnected" flip so fields never flickered.
                 reconnectGraceJob?.cancel()
@@ -342,6 +401,7 @@ class PolarBleManager private constructor(private val context: Context) {
             }
 
             override fun deviceDisconnected(polarDeviceInfo: PolarDeviceInfo) {
+                if (!isTargetStrap(polarDeviceInfo)) return
                 disconnectedAt = System.currentTimeMillis()
                 hrDisposable?.dispose()
                 hrDisposable = null
@@ -355,6 +415,7 @@ class PolarBleManager private constructor(private val context: Context) {
                 reconnectGraceJob = managerScope.launch {
                     delay(RECONNECT_GRACE_MS)
                     _connectedFlow.value = false
+                    _connectedDeviceNameFlow.value = null
                     clearHrvOutputs()
                     events.tryEmit(BleEvent.Disconnected)
                     reconnectGraceJob = null
@@ -367,6 +428,7 @@ class PolarBleManager private constructor(private val context: Context) {
             }
 
             override fun batteryLevelReceived(identifier: String, level: Int) {
+                if (identifier != activeDeviceId) return
                 _batteryFlow.value = level
             }
 
@@ -375,6 +437,7 @@ class PolarBleManager private constructor(private val context: Context) {
                 feature: PolarBleApi.PolarBleSdkFeature,
             ) {
                 if (feature != PolarBleApi.PolarBleSdkFeature.FEATURE_HR) return
+                if (identifier != activeDeviceId) return
                 hrDisposable?.dispose()
                 hrDisposable = api.startHrStreaming(identifier)
                     .observeOn(Schedulers.computation())
