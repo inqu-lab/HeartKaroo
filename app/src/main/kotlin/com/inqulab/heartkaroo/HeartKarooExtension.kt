@@ -15,6 +15,7 @@ import com.inqulab.heartkaroo.decoupling.PaHrDecouplingDataType
 import com.inqulab.heartkaroo.efficiency.CardiacCostDataType
 import com.inqulab.heartkaroo.efficiency.EfficiencyFactorDataType
 import com.inqulab.heartkaroo.power.CoastingDataType
+import com.inqulab.heartkaroo.power.EftpDataType
 import com.inqulab.heartkaroo.power.IntensityFactorDataType
 import com.inqulab.heartkaroo.power.KilojoulesDataType
 import com.inqulab.heartkaroo.power.MmpDataType
@@ -22,6 +23,7 @@ import com.inqulab.heartkaroo.power.QuadrantAnalysisDataType
 import com.inqulab.heartkaroo.power.RidePowerEngine
 import com.inqulab.heartkaroo.power.TssDataType
 import com.inqulab.heartkaroo.power.VariabilityIndexDataType
+import com.inqulab.heartkaroo.power.WattsPerKgDataType
 import com.inqulab.heartkaroo.settings.RiderSettings
 import com.inqulab.heartkaroo.hrv.DfaAlpha1DataType
 import com.inqulab.heartkaroo.hrv.HRVDataType
@@ -29,6 +31,7 @@ import com.inqulab.heartkaroo.hrv.HRVStressDataType
 import com.inqulab.heartkaroo.hrv.HrvFlowDataType
 import com.inqulab.heartkaroo.hrv.PolarBleManager
 import com.inqulab.heartkaroo.wprime.WPrimeBalanceDataType
+import com.inqulab.heartkaroo.wprime.WPrimePercentDataType
 import io.hammerhead.karooext.KarooSystemService
 import io.hammerhead.karooext.extension.KarooExtension
 import io.hammerhead.karooext.internal.Emitter
@@ -277,6 +280,7 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             EfficiencyFactorDataType(this),
             CardiacCostDataType(this),
             WPrimeBalanceDataType(this),
+            WPrimePercentDataType(this),
             CardiacPopDataType(this),
             AerobicThresholdDataType(this),
             OptimalCadenceDataType(this),
@@ -286,6 +290,8 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             KilojoulesDataType(this),
             CoastingDataType(this),
             QuadrantAnalysisDataType(this),
+            WattsPerKgDataType(this),
+            EftpDataType(this),
             VamDataType(this),
             MmpDataType(this, "mmp_5s"),
             MmpDataType(this, "mmp_1min"),

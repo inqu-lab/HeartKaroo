@@ -54,4 +54,25 @@ class PowerMetricsTest {
         assertEquals(0f, PowerMetrics.trainingStressScore(270f, 270, 0.0)!!, 1e-6f)
         assertNull(PowerMetrics.trainingStressScore(null, 270, 3600.0))
     }
+
+    @Test
+    fun `eFTP is 95 percent of best 20-minute power`() {
+        assertEquals(285f, PowerMetrics.eftp(300f)!!, 1e-3f)
+        assertNull(PowerMetrics.eftp(null))
+    }
+
+    @Test
+    fun `W-prime percent is the balance share of W-prime-zero`() {
+        assertEquals(50f, PowerMetrics.wPrimePercent(10_000f, 20_000)!!, 1e-3f)
+        assertEquals(100f, PowerMetrics.wPrimePercent(20_000f, 20_000)!!, 1e-3f)
+        assertNull(PowerMetrics.wPrimePercent(null, 20_000))
+    }
+
+    @Test
+    fun `W-prime percent clamps to the gauge and floors W-prime-zero at 1`() {
+        // Overdrawn model reads 0, not negative.
+        assertEquals(0f, PowerMetrics.wPrimePercent(-500f, 20_000)!!, 1e-6f)
+        // A non-positive W′₀ can't divide; the floor keeps it finite and clamped.
+        assertEquals(100f, PowerMetrics.wPrimePercent(500f, 0)!!, 1e-6f)
+    }
 }

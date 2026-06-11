@@ -70,6 +70,7 @@ class RidePowerEngine(
     // reset so a change in the Settings screen takes effect on the next ride.
     private var quadrantCalc = QuadrantAnalysisCalculator(ftpW = settings.ftpW.toDouble())
     private var wPrimeCalc = newWPrimeCalc()
+    private var wattsPerKgCalc = newWattsPerKgCalc()
     private val mmpCalcs = mmpDurations.mapValues { (_, d) -> MmpCalculator(d) }
 
     // After-ride summary state (snapshotted into the FIT session message).
@@ -108,6 +109,12 @@ class RidePowerEngine(
     val aet: StateFlow<Float?> = _aet.asStateFlow()
     private val _optimalCadence = MutableStateFlow<Float?>(null)
     val optimalCadence: StateFlow<Float?> = _optimalCadence.asStateFlow()
+    private val _wattsPerKg = MutableStateFlow<Float?>(null)
+    val wattsPerKg: StateFlow<Float?> = _wattsPerKg.asStateFlow()
+    private val _eftp = MutableStateFlow<Float?>(null)
+    val eftp: StateFlow<Float?> = _eftp.asStateFlow()
+    private val _wPrimePct = MutableStateFlow<Float?>(null)
+    val wPrimePct: StateFlow<Float?> = _wPrimePct.asStateFlow()
     private val _mmp = mmpDurations.keys.associateWith { MutableStateFlow<Float?>(null) }
 
     fun mmpFlow(typeId: String): StateFlow<Float?> = _mmp.getValue(typeId).asStateFlow()
@@ -180,11 +187,13 @@ class RidePowerEngine(
 
         _kilojoules.value = kjCalc.add(now, power)
         _coasting.value = coastingCalc.add(now, power)
+        _wattsPerKg.value = wattsPerKgCalc.add(now, power)
         val wBal = wPrimeCalc.add(now, power)
         _wPrimeBalance.value = wBal
         val wBalD = wBal.toDouble()
         if (wBalD < wPrimeMin) wPrimeMin = wBalD
         val wpJ = settings.wPrimeJ
+        _wPrimePct.value = PowerMetrics.wPrimePercent(wBal, wpJ)
         if (matchArmed && wBalD < wpJ * 0.25) {
             matchesBurned++
             matchArmed = false
@@ -193,6 +202,7 @@ class RidePowerEngine(
         }
 
         for ((id, calc) in mmpCalcs) _mmp.getValue(id).value = calc.add(now, power)
+        _eftp.value = PowerMetrics.eftp(_mmp.getValue("mmp_20min").value)
 
         if (hr != null && hr > 0.0) {
             _efficiencyFactor.value = efCalc.add(now, power, hr)
@@ -264,6 +274,7 @@ class RidePowerEngine(
         cadenceCalc.reset()
         quadrantCalc = QuadrantAnalysisCalculator(ftpW = settings.ftpW.toDouble())
         wPrimeCalc = newWPrimeCalc()
+        wattsPerKgCalc = newWattsPerKgCalc()
         mmpCalcs.values.forEach { it.reset() }
         dfaZones.reset()
         wPrimeMin = Double.POSITIVE_INFINITY
@@ -285,6 +296,9 @@ class RidePowerEngine(
         _vam.value = null
         _aet.value = null
         _optimalCadence.value = null
+        _wattsPerKg.value = null
+        _eftp.value = null
+        _wPrimePct.value = null
         _mmp.values.forEach { it.value = null }
     }
 
@@ -292,6 +306,10 @@ class RidePowerEngine(
         criticalPowerW = settings.criticalPowerW.toDouble(),
         wPrimeJ = settings.wPrimeJ.toDouble(),
     )
+
+    // Weight feeds the calculator at construction; rebuilt on reset so a change
+    // in the Settings screen takes effect on the next ride.
+    private fun newWattsPerKgCalc() = WattsPerKgCalculator(weightKg = settings.weightKg)
 
     private fun StreamState.singleValue(): Double? =
         (this as? StreamState.Streaming)?.dataPoint?.values?.values?.firstOrNull()

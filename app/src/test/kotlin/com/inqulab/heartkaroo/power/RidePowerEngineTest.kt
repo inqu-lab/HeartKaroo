@@ -59,6 +59,20 @@ class RidePowerEngineTest {
         assertEquals(0.0f, e.decoupling.value!!, 0.01f)            // constant ratio
         assertNotNull(e.tss.value)
         assertTrue("TSS should accumulate", e.tss.value!! > 0f)
+        assertEquals(200f / 75f, e.wattsPerKg.value!!, 0.01f)      // 3 s power / weight
+        // 200 W is below CP 250, so W′ stays a full tank.
+        assertEquals(100f, e.wPrimePct.value!!, 0.5f)
+    }
+
+    @Test
+    fun `eFTP resolves at 95 percent of best 20-minute power`() {
+        val e = newEngine()
+        e.feedConstant(600, 200.0) // 10 min — 20-min window not filled yet
+        assertNull(e.eftp.value)
+
+        val e2 = newEngine()
+        e2.feedConstant(1300, 200.0) // past the 20-min window
+        assertEquals(190f, e2.eftp.value!!, 2f) // 0.95 × 200 W
     }
 
     @Test
@@ -149,5 +163,8 @@ class RidePowerEngineTest {
         assertNull(e.efficiencyFactor.value)
         assertNull(e.decoupling.value)
         assertNull(e.aet.value)
+        assertNull(e.wattsPerKg.value)
+        assertNull(e.eftp.value)
+        assertNull(e.wPrimePct.value)
     }
 }

@@ -115,6 +115,14 @@
         unitName="J" />
 
     <DataType
+        typeId="w_prime_pct"
+        displayName="@string/w_prime_pct_name"
+        description="@string/w_prime_pct_description"
+        graphical="true"
+        sampleRate="1000"
+        unitName="%" />
+
+    <DataType
         typeId="cardiac_pop_minute"
         displayName="@string/cardiac_pop_name"
         description="@string/cardiac_pop_description"
@@ -226,6 +234,22 @@
         typeId="mmp_60min"
         displayName="@string/mmp_60min_name"
         description="@string/mmp_60min_description"
+        graphical="false"
+        sampleRate="1000"
+        unitName="W" />
+
+    <DataType
+        typeId="watts_per_kg"
+        displayName="@string/watts_per_kg_name"
+        description="@string/watts_per_kg_description"
+        graphical="false"
+        sampleRate="1000"
+        unitName="W/kg" />
+
+    <DataType
+        typeId="eftp"
+        displayName="@string/eftp_name"
+        description="@string/eftp_description"
         graphical="false"
         sampleRate="1000"
         unitName="W" />

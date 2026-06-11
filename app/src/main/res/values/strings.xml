@@ -45,6 +45,9 @@
     <string name="w_prime_balance_name">W′ balance</string>
     <string name="w_prime_balance_description">Skiba W′ balance — the joules of anaerobic capacity remaining (your "matches left"). Burns down above critical power, recovers exponentially below. Defaults: CP 250 W, W′ 20 000 J — personalise via a future settings screen.</string>
 
+    <string name="w_prime_pct_name">W′ %</string>
+    <string name="w_prime_pct_description">Skiba W′ balance as a percentage of full anaerobic capacity — a 0–100 % "matches left" fuel gauge. Same model as the W′ balance field, but readable at a glance without knowing your W′ in joules.</string>
+
     <string name="cardiac_pop_name">Cardiac pop @ min</string>
     <string name="cardiac_pop_description">Latches the minute mark at which Pw:Hr decoupling first sustained above 5% — the moment your aerobic ceiling broke. Reads — until the pop happens, then a constant value for the rest of the ride.</string>
 
@@ -89,6 +92,12 @@
     <string name="mmp_60min_name">Best 60 min power</string>
     <string name="mmp_60min_description">Highest 60-minute mean power so far in this ride — closest single-number proxy for true FTP.</string>
 
+    <string name="watts_per_kg_name">Power W/kg</string>
+    <string name="watts_per_kg_description">Power-to-weight ratio — 3-second smoothed power divided by your weight (default 75 kg — adjust in Rider Settings). The number climbing performance is measured in.</string>
+
+    <string name="eftp_name">eFTP</string>
+    <string name="eftp_description">Live FTP estimate — 95 % of the best 20-minute power seen so far this ride (the classic 20-min test protocol). Reads — until 20 min of power has accumulated, and is only meaningful after a hard sustained effort.</string>
+
     <string name="optimal_cadence_name">Optimal cadence</string>
     <string name="optimal_cadence_description">Within-ride best-efficiency cadence (RPM) — bins power+HR by cadence and reports the bucket with the highest watts-per-beat. Per-ride finals are persisted; the rolling mean shows on the Readiness screen. Reads — until at least two cadence bins have enough samples.</string>
 
@@ -126,7 +135,7 @@
 
     <string name="settings_button">Edit rider settings</string>
     <string name="settings_title">Rider Settings</string>
-    <string name="settings_body">These values feed Intensity Factor / TSS (FTP), W′ balance (CP and W′), and future power-to-weight fields. Defaults are reasonable starting values; tune them once you know your numbers.</string>
+    <string name="settings_body">These values feed Intensity Factor / TSS (FTP), W′ balance and W′ % (CP and W′), and Power W/kg (weight). Defaults are reasonable starting values; tune them once you know your numbers.</string>
     <string name="settings_ftp_label">FTP (W)</string>
     <string name="settings_ftp_hint">50 – 600</string>
     <string name="settings_cp_label">Critical Power (W)</string>

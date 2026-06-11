@@ -18,6 +18,7 @@ SDK. No cloud, no account, no network access — the app requests no
 | Efficiency Factor | `efficiency_factor` | Coggan NP / avg HR over the last 30 min. Higher is more aerobically efficient. |
 | Cardiac cost | `cardiac_cost` | HR/W average over the last 30 min — inverse of EF, more intuitive scale. |
 | W′ balance | `w_prime_balance` | Skiba 2012 "matches left" anaerobic capacity in joules. Defaults: CP 250 W, W′ 20 000 J (override in Rider Settings). |
+| W′ % | `w_prime_pct` | Same Skiba balance as a 0–100 % fuel gauge, colour-coded — readable at a glance without knowing your W′ in joules. |
 | Cardiac pop @ min | `cardiac_pop_minute` | Latches the minute at which decoupling first sustains above 5%. |
 | AeT estimate | `aet_estimate` | Live aerobic-threshold power (watts) — fits DFA α1 vs power and solves for α1 = 0.75. Per-ride finals are persisted; the rolling mean shows on the Readiness screen. |
 
@@ -32,6 +33,8 @@ SDK. No cloud, no account, no network access — the app requests no
 | Coasting % | `coasting_pct` | % of ride time at &lt;5 W. |
 | Quadrant | `quadrant` | Coggan quadrant analysis (1-4) from power+cadence over the last 60 s. |
 | Best 5 s / 1 min / 5 min / 20 min / 60 min power | `mmp_5s` / `mmp_1min` / `mmp_5min` / `mmp_20min` / `mmp_60min` | Highest mean power for that duration seen so far in the ride. |
+| Power W/kg | `watts_per_kg` | Power-to-weight ratio — 3-second smoothed power over rider weight (default 75 kg, override in Rider Settings). |
+| eFTP | `eftp` | Live FTP estimate — 95 % of the best 20-min power so far this ride. |
 | VAM | `vam` | Vertical Ascent Meters per hour over the last 60 s of elevation gain. |
 | Optimal cadence | `optimal_cadence` | Within-ride best-efficiency cadence, reported in RPM — bins power+HR by cadence and reports the centre of the bucket with the highest watts-per-beat. Persisted per-ride; rolling mean on the Readiness screen. |
 
