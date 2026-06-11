@@ -10,7 +10,10 @@ package com.inqulab.heartkaroo.aet
  *
  * Notes & guardrails:
  *  - Each α1 sample is paired with the average power over the last
- *    `powerSmoothingMs`, since α1 is itself a ~2-min trailing estimate.
+ *    `powerSmoothingMs`. The default (2 min) matches the span of RR data
+ *    a fresh α1 value actually reflects (its window needs ≥120 beats);
+ *    pairing against a shorter power window mis-attributes the α1 of the
+ *    previous minutes to the power of the last few seconds.
  *  - α1 samples outside [alphaMin, alphaMax] are dropped — far from the
  *    threshold the α1-vs-power relationship saturates and a linear fit
  *    becomes meaningless.
@@ -22,7 +25,7 @@ package com.inqulab.heartkaroo.aet
 class AerobicThresholdCalibrator(
     private val alphaTarget: Double = 0.75,
     private val minSamples: Int = 60,
-    private val powerSmoothingMs: Long = 30_000L,
+    private val powerSmoothingMs: Long = 120_000L,
     private val alphaMin: Double = 0.40,
     private val alphaMax: Double = 1.20,
 ) {

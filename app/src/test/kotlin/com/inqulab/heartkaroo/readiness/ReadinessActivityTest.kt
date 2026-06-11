@@ -6,7 +6,6 @@ import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
 import com.inqulab.heartkaroo.R
 import com.inqulab.heartkaroo.aet.AerobicThresholdStore
-import com.inqulab.heartkaroo.cadence.OptimalCadenceStore
 import com.inqulab.heartkaroo.power.EftpStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -29,7 +28,7 @@ class ReadinessActivityTest {
 
     @Before
     fun clearPrefs() {
-        for (name in listOf("readiness", "aet", "optimal_cadence", "eftp")) {
+        for (name in listOf("readiness", "aet", "eftp")) {
             context.getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear().commit()
         }
     }
@@ -48,10 +47,6 @@ class ReadinessActivityTest {
             a.findViewById<TextView>(R.id.readiness_aet).text.toString(),
         )
         assertEquals(
-            context.getString(R.string.readiness_cadence_none),
-            a.findViewById<TextView>(R.id.readiness_cadence).text.toString(),
-        )
-        assertEquals(
             context.getString(R.string.readiness_eftp_none),
             a.findViewById<TextView>(R.id.readiness_eftp).text.toString(),
         )
@@ -62,13 +57,11 @@ class ReadinessActivityTest {
         val now = System.currentTimeMillis()
         ReadinessStore(context).record(now, 62f)
         AerobicThresholdStore(context).record(now, 205f, 120)
-        OptimalCadenceStore(context).record(now, 92f, 500)
         EftpStore(context).record(now, 264f)
 
         val a = launch()
 
         assertTrue(a.findViewById<TextView>(R.id.readiness_aet).text.toString().contains("205"))
-        assertTrue(a.findViewById<TextView>(R.id.readiness_cadence).text.toString().contains("92"))
         assertTrue(a.findViewById<TextView>(R.id.readiness_eftp).text.toString().contains("264"))
         assertTrue(
             a.findViewById<TextView>(R.id.readiness_verdict).text.toString() !=

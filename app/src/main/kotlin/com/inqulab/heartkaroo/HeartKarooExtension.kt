@@ -6,8 +6,6 @@ import android.os.Build
 import androidx.core.content.ContextCompat
 import com.inqulab.heartkaroo.aet.AerobicThresholdDataType
 import com.inqulab.heartkaroo.aet.AerobicThresholdStore
-import com.inqulab.heartkaroo.cadence.OptimalCadenceDataType
-import com.inqulab.heartkaroo.cadence.OptimalCadenceStore
 import com.inqulab.heartkaroo.climb.VamDataType
 import com.inqulab.heartkaroo.decoupling.CardiacPopDataType
 import com.inqulab.heartkaroo.decoupling.DecouplingDataType
@@ -68,7 +66,6 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
     class RideSummarySnapshot(
         val aet: Float?,
         val vt2: Float?,
-        val optimalCadence: Float?,
         val wPrimeMinJ: Double?,
         val matchesBurned: Int,
         val dfaAerobicS: Double,
@@ -142,13 +139,8 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
 
         // After-ride summary fields written to the session message so they
         // surface as per-ride numbers (custom activity fields in intervals.icu).
-        val OPTIMAL_CADENCE_FIELD = DeveloperField(
-            fieldDefinitionNumber = 6,
-            fitBaseTypeId = 136,
-            fieldName = "optimal_cadence",
-            units = "rpm",
-        )
-
+        // (Field number 6 was optimal_cadence, removed; the number stays
+        // retired so old FIT files don't collide with a future field.)
         val WPRIME_MIN_FIELD = DeveloperField(
             fieldDefinitionNumber = 7,
             fitBaseTypeId = 136,
@@ -235,7 +227,6 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
         fun sessionSummaryFields(s: RideSummarySnapshot): List<FieldValue> = buildList {
             s.aet?.let { add(FieldValue(AET_FIELD, it.toDouble())) }
             s.vt2?.let { add(FieldValue(VT2_FIELD, it.toDouble())) }
-            s.optimalCadence?.let { add(FieldValue(OPTIMAL_CADENCE_FIELD, it.toDouble())) }
             s.wPrimeMinJ?.let {
                 add(FieldValue(WPRIME_MIN_FIELD, it))
                 add(FieldValue(MATCHES_BURNED_FIELD, s.matchesBurned.toDouble()))
@@ -253,7 +244,6 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
         }
 
         private const val MIN_AET_SAMPLES_TO_PERSIST = 60
-        private const val MIN_CADENCE_SAMPLES_TO_PERSIST = 300
 
         // How often the after-ride session summaries are (re)written; the
         // last write before the ride ends supplies the final values.
@@ -284,7 +274,6 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             WPrimePercentDataType(this),
             CardiacPopDataType(this),
             AerobicThresholdDataType(this),
-            OptimalCadenceDataType(this),
             VariabilityIndexDataType(this),
             IntensityFactorDataType(this),
             TssDataType(this),
@@ -533,7 +522,6 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
                 val snapshot = RideSummarySnapshot(
                     aet = ridePowerEngine.aetCurrentEstimate(),
                     vt2 = ridePowerEngine.vt2CurrentEstimate(),
-                    optimalCadence = ridePowerEngine.optimalCadenceCurrent(),
                     wPrimeMinJ = ridePowerEngine.wPrimeMinJ(),
                     matchesBurned = ridePowerEngine.matchesBurnedCount,
                     dfaAerobicS = ridePowerEngine.dfaAerobicSeconds(),
@@ -560,12 +548,6 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             if (shouldPersistRollingFinal(final, samples, MIN_AET_SAMPLES_TO_PERSIST)) {
                 AerobicThresholdStore(applicationContext)
                     .record(System.currentTimeMillis(), final!!, samples)
-            }
-            val cadenceFinal = ridePowerEngine.optimalCadenceCurrent()
-            val cadenceSamples = ridePowerEngine.optimalCadenceSamples
-            if (shouldPersistRollingFinal(cadenceFinal, cadenceSamples, MIN_CADENCE_SAMPLES_TO_PERSIST)) {
-                OptimalCadenceStore(applicationContext)
-                    .record(System.currentTimeMillis(), cadenceFinal!!, cadenceSamples)
             }
             // eFTP is non-null only once a full 20-min power window has been
             // ridden, so that is the quality gate — no sample-count check needed.

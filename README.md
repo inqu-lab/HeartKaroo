@@ -34,9 +34,8 @@ SDK. No cloud, no account, no network access — the app requests no
 | Quadrant | `quadrant` | Coggan quadrant analysis (1-4) from power+cadence over the last 60 s. |
 | Best 5 s / 1 min / 5 min / 20 min / 60 min power | `mmp_5s` / `mmp_1min` / `mmp_5min` / `mmp_20min` / `mmp_60min` | Highest mean power for that duration seen so far in the ride. |
 | Power W/kg | `watts_per_kg` | Power-to-weight ratio — 3-second smoothed power over rider weight (default 75 kg, override in Rider Settings). |
-| eFTP | `eftp` | Live FTP estimate — 95 % of the best 20-min power so far this ride. Per-ride finals are persisted; the 42-day best shows on the Readiness screen. |
+| FTP est (20 min) | `eftp` | FTP estimate — 95 % of the best 20-min power so far this ride (only meaningful after a hard sustained effort; not a power-duration-model "eFTP"). Per-ride finals are persisted; the 42-day best shows on the Readiness screen. |
 | VAM | `vam` | Vertical Ascent Meters per hour over the last 60 s of elevation gain. |
-| Optimal cadence | `optimal_cadence` | Within-ride best-efficiency cadence, reported in RPM — bins power+HR by cadence and reports the centre of the bucket with the highest watts-per-beat. Persisted per-ride; rolling mean on the Readiness screen. |
 
 The power/pace analytics use Karoo's native power, speed, cadence and
 elevation streams (from whatever sensors are paired) plus heart rate, so
@@ -93,7 +92,6 @@ session message (latest value wins), so they show up as after-ride numbers
 |---|---|---|
 | `aet_estimate` | watts | Final aerobic-threshold estimate (DFA α1 = 0.75). |
 | `vt2_estimate` | watts | Second-threshold estimate from the same fit (DFA α1 = 0.50). |
-| `optimal_cadence` | rpm | Best-efficiency cadence (highest W per beat). |
 | `w_prime_min` | J | Lowest W′ balance reached — depth into anaerobic reserve. |
 | `matches_burned` | — | Count of fresh dips below 25% W′ (re-armed above 30%). Written only alongside `w_prime_min`. |
 | `dfa_a1_aerobic_s` | s | Time with DFA α1 ≥ 0.75 (below LT1). |
@@ -119,8 +117,8 @@ live-display-only.
   z-score) and surfaced as a "go hard / go easy / normal" verdict (needs at
   least 3 days of history before it gives a verdict). The baseline lives in
   `SharedPreferences` and updates each time you measure. The screen also
-  shows the rolling AeT estimate and rolling optimal cadence accumulated
-  from previous rides.
+  shows the rolling AeT estimate and the 42-day best FTP estimate
+  accumulated from previous rides.
 - **Rider Settings** (`SettingsActivity`) — FTP, critical power, W′, HR
   max, and weight. These feed Intensity Factor / TSS (FTP), W′ balance (CP
   and W′), and any future power-to-weight fields. Range-validated on save,
@@ -227,17 +225,16 @@ Most of the suite is pure-Kotlin or runs on the JVM via
   reset), HRV RMSSD / SDNN / pNN50 / Poincaré, DFA α1, the RR artifact
   corrector, the DFA α1 zone timer, respiratory rate, the ectopic detector,
   Normalized Power, kilojoules, coasting, MMP, quadrant analysis,
-  efficiency factor, cardiac cost, VAM, W′ balance, the AeT calibrator, the
-  optimal-cadence calculator, and the shared `PowerMetrics` ratio formulas.
+  efficiency factor, cardiac cost, VAM, W′ balance, the AeT calibrator, and the shared `PowerMetrics` ratio formulas.
 - **Orchestration** — `RidePowerEngine` is driven through its stream
   handlers and asserted on the resulting `StateFlow`s (IF/VI/TSS, kJ,
-  coasting, W′, MMP, EF, cardiac cost, decoupling, quadrant, optimal
-  cadence, VAM, AeT) plus `resetRide`; the strap low-battery hysteresis
+  coasting, W′, MMP, EF, cardiac cost, decoupling, quadrant,
+  VAM, AeT) plus `resetRide`; the strap low-battery hysteresis
   (`StrapBatteryAlerter`), the ride-stop persistence gate
   (`shouldPersistRollingFinal`), the session-summary field assembly
   (`SessionSummaryFields`), and the Karoo stream bridge (`KarooStreamExt`).
 - **Persistence (Robolectric)** — `ReadinessStore`, `AerobicThresholdStore`,
-  `OptimalCadenceStore`, and `RiderSettings` exercise real
+  `EftpStore`, and `RiderSettings` exercise real
   `SharedPreferences`: record/read round-trips, the 7- and 90-day window
   eviction, input validation, defaults, and tolerance of malformed values.
 - **Screens (Robolectric)** — `MainActivity`, `ReadinessActivity`, and
@@ -322,10 +319,6 @@ app/src/main/kotlin/com/inqulab/heartkaroo/
 ├── climb/
 │   ├── VamCalculator.kt
 │   └── VamDataType.kt
-├── cadence/
-│   ├── OptimalCadenceCalculator.kt     Per-bin W/HR efficiency
-│   ├── OptimalCadenceStore.kt          SharedPreferences rolling history
-│   └── OptimalCadenceDataType.kt       Live optimal-cadence field
 ├── settings/
 │   ├── RiderSettings.kt                FTP / CP / W′ / HRmax / weight prefs
 │   └── SettingsActivity.kt             Edit-rider-settings screen

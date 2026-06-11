@@ -19,7 +19,6 @@ class SessionSummaryFieldsTest {
     private fun snapshot(
         aet: Float? = null,
         vt2: Float? = null,
-        optimalCadence: Float? = null,
         wPrimeMinJ: Double? = null,
         matchesBurned: Int = 0,
         dfaAerobicS: Double = 0.0,
@@ -28,7 +27,7 @@ class SessionSummaryFieldsTest {
         cardiacPopMin: Float? = null,
         quadrantPct: DoubleArray? = null,
     ) = HeartKarooExtension.RideSummarySnapshot(
-        aet, vt2, optimalCadence, wPrimeMinJ, matchesBurned,
+        aet, vt2, wPrimeMinJ, matchesBurned,
         dfaAerobicS, dfaThresholdS, dfaHardS, cardiacPopMin, quadrantPct,
     )
 
@@ -65,7 +64,6 @@ class SessionSummaryFieldsTest {
             snapshot(
                 aet = 210f,
                 vt2 = 260f,
-                optimalCadence = 92f,
                 wPrimeMinJ = 500.0,
                 matchesBurned = 2,
                 dfaAerobicS = 600.0,
@@ -76,10 +74,9 @@ class SessionSummaryFieldsTest {
             ),
         )
         val byName = fields.byName()
-        assertEquals(13, fields.size)
+        assertEquals(12, fields.size)
         assertEquals(210.0, byName.getValue("aet_estimate"), 1e-6)
         assertEquals(260.0, byName.getValue("vt2_estimate"), 1e-6)
-        assertEquals(92.0, byName.getValue("optimal_cadence"), 1e-6)
         assertEquals(500.0, byName.getValue("w_prime_min"), 1e-9)
         assertEquals(2.0, byName.getValue("matches_burned"), 1e-9)
         assertEquals(600.0, byName.getValue("dfa_a1_aerobic_s"), 1e-9)

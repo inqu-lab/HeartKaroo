@@ -1,7 +1,6 @@
 package com.inqulab.heartkaroo.power
 
 import com.inqulab.heartkaroo.aet.AerobicThresholdCalibrator
-import com.inqulab.heartkaroo.cadence.OptimalCadenceCalculator
 import com.inqulab.heartkaroo.climb.VamCalculator
 import com.inqulab.heartkaroo.decoupling.CardiacPopDetector
 import com.inqulab.heartkaroo.decoupling.DecouplingCalculator
@@ -65,7 +64,6 @@ class RidePowerEngine(
     private val popDetector = CardiacPopDetector()
     private val vamCalc = VamCalculator()
     private val aetCalc = AerobicThresholdCalibrator()
-    private val cadenceCalc = OptimalCadenceCalculator()
     // FTP / CP / W′₀ feed split lines or the model at construction; rebuilt on
     // reset so a change in the Settings screen takes effect on the next ride.
     private var quadrantCalc = QuadrantAnalysisCalculator(ftpW = settings.ftpW.toDouble())
@@ -107,8 +105,6 @@ class RidePowerEngine(
     val vam: StateFlow<Float?> = _vam.asStateFlow()
     private val _aet = MutableStateFlow<Float?>(null)
     val aet: StateFlow<Float?> = _aet.asStateFlow()
-    private val _optimalCadence = MutableStateFlow<Float?>(null)
-    val optimalCadence: StateFlow<Float?> = _optimalCadence.asStateFlow()
     private val _wattsPerKg = MutableStateFlow<Float?>(null)
     val wattsPerKg: StateFlow<Float?> = _wattsPerKg.asStateFlow()
     private val _eftp = MutableStateFlow<Float?>(null)
@@ -222,10 +218,8 @@ class RidePowerEngine(
         val cad = latestCadence
         if (cad != null && cad > 0.0) {
             quadrantCalc.add(now, power, cad)
-            if (hr != null && hr > 0.0) cadenceCalc.add(power, hr, cad)
         }
         _quadrant.value = quadrantCalc.dominantQuadrant()?.toFloat()
-        _optimalCadence.value = cadenceCalc.optimalCadence()
     }
 
     @Synchronized
@@ -241,10 +235,6 @@ class RidePowerEngine(
     /** AeT estimate / sample count for per-ride persistence (read at ride stop). */
     fun aetCurrentEstimate(): Float? = aetCalc.currentEstimate()
     val aetSampleCount: Int get() = aetCalc.sampleCount
-
-    /** Optimal cadence / sample count for per-ride persistence (read at ride stop). */
-    fun optimalCadenceCurrent(): Float? = cadenceCalc.optimalCadence()
-    val optimalCadenceSamples: Int get() = cadenceCalc.totalSamples
 
     // After-ride summary snapshots for the FIT session writer.
     /** VT2 / second-threshold power from the AeT fit solved at DFA α1 = 0.50. */
@@ -271,7 +261,6 @@ class RidePowerEngine(
         popDetector.reset()
         vamCalc.reset()
         aetCalc.reset()
-        cadenceCalc.reset()
         quadrantCalc = QuadrantAnalysisCalculator(ftpW = settings.ftpW.toDouble())
         wPrimeCalc = newWPrimeCalc()
         wattsPerKgCalc = newWattsPerKgCalc()
@@ -295,7 +284,6 @@ class RidePowerEngine(
         _wPrimeBalance.value = null
         _vam.value = null
         _aet.value = null
-        _optimalCadence.value = null
         _wattsPerKg.value = null
         _eftp.value = null
         _wPrimePct.value = null

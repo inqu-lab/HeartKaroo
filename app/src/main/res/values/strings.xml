@@ -4,7 +4,7 @@
     <string name="extension_name">HeartKaroo</string>
 
     <string name="decoupling_name">Pw:Hr Decoupling</string>
-    <string name="decoupling_description" formatted="false">Real-time aerobic decoupling between power and heart rate (%). Lower is better; under 5% indicates well-coupled aerobic effort.</string>
+    <string name="decoupling_description" formatted="false">Real-time aerobic decoupling between power and heart rate (%). Lower is better; under 5% indicates well-coupled aerobic effort. Assumes a steady effort — during intervals or very variable riding the number reflects the intensity change, not cardiac drift.</string>
 
     <string name="hrv_rmssd_name">HRV (RMSSD)</string>
     <string name="hrv_rmssd_description">Heart Rate Variability — RMSSD in milliseconds, calculated from Polar H10 RR intervals via Bluetooth</string>
@@ -37,10 +37,10 @@
     <string name="ectopic_rate_description">Count per minute of RR intervals that deviate &gt;20 % from the previous accepted interval — a rough indicator of premature / ectopic beats. NOT a clinical diagnostic. If you see consistently high values at rest, consult a physician.</string>
 
     <string name="pa_hr_decoupling_name">Pa:Hr Decoupling</string>
-    <string name="pa_hr_decoupling_description">Aerobic decoupling between speed (pace) and heart rate (%) over the last 30 min. Same Friel method as Pw:Hr Decoupling but for riders without a power meter (or runners). Reads — for the first 10 min.</string>
+    <string name="pa_hr_decoupling_description">Aerobic decoupling between speed (pace) and heart rate (%) over the last 30 min. Same Friel method as Pw:Hr Decoupling but for riders without a power meter (or runners). Speed is terrain-confounded — trust it on steady efforts over flat ground, not hilly or variable riding. Reads — for the first 10 min.</string>
 
     <string name="efficiency_factor_name">Efficiency Factor</string>
-    <string name="efficiency_factor_description">Coggan Efficiency Factor — Normalized Power divided by average heart rate over the last 30 min. Higher is more aerobically efficient. Compare across rides at similar intensity. Reads — for the first 10 min.</string>
+    <string name="efficiency_factor_description">Coggan Efficiency Factor — Normalized Power divided by average heart rate over the last 30 min. Higher is more aerobically efficient. Compare across rides at similar, steady intensity — surges and intervals inside the window distort it. Reads — for the first 10 min.</string>
 
     <string name="w_prime_balance_name">W′ balance</string>
     <string name="w_prime_balance_description">Skiba W′ balance — the joules of anaerobic capacity remaining (your "matches left"). Burns down above critical power, recovers exponentially below. Defaults: CP 250 W, W′ 20 000 J — personalise via a future settings screen.</string>
@@ -95,16 +95,10 @@
     <string name="watts_per_kg_name">Power W/kg</string>
     <string name="watts_per_kg_description">Power-to-weight ratio — 3-second smoothed power divided by your weight (default 75 kg — adjust in Rider Settings). The number climbing performance is measured in.</string>
 
-    <string name="eftp_name">eFTP</string>
-    <string name="eftp_description">Live FTP estimate — 95 % of the best 20-minute power seen so far this ride (the classic 20-min test protocol). Reads — until 20 min of power has accumulated, and is only meaningful after a hard sustained effort. Per-ride finals are persisted; the 42-day best shows on the Readiness screen.</string>
+    <string name="eftp_name">FTP est (20 min)</string>
+    <string name="eftp_description">FTP estimate from the classic 20-minute protocol — 95 % of the best 20-minute power seen so far this ride. Only meaningful after a hard sustained effort: an easy ride reports 95 % of easy riding, not your FTP. (Not the power-duration-model "eFTP" of Xert / intervals.icu.) Reads — until 20 min of power has accumulated. Per-ride finals are persisted; the 42-day best shows on the Readiness screen.</string>
 
-    <string name="optimal_cadence_name">Optimal cadence</string>
-    <string name="optimal_cadence_description">Within-ride best-efficiency cadence (RPM) — bins power+HR by cadence and reports the bucket with the highest watts-per-beat. Per-ride finals are persisted; the rolling mean shows on the Readiness screen. Reads — until at least two cadence bins have enough samples.</string>
-
-    <string name="readiness_cadence_fmt">Rolling optimal cadence: %1$d RPM  (%2$d rides)</string>
-    <string name="readiness_cadence_none">No optimal-cadence history yet — ride with a power meter and HR strap paired.</string>
-
-    <string name="readiness_eftp_fmt">Rolling eFTP: %1$d W  (best of %2$d rides, 42 days)</string>
+    <string name="readiness_eftp_fmt">Rolling FTP estimate: %1$d W  (best of %2$d rides, 42 days)</string>
     <string name="readiness_eftp_none">No eFTP history yet — finish a ride with at least 20 min of power data.</string>
 
     <string name="readiness_button">Take HRV readiness reading</string>
