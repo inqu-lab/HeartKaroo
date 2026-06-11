@@ -34,7 +34,7 @@ SDK. No cloud, no account, no network access — the app requests no
 | Quadrant | `quadrant` | Coggan quadrant analysis (1-4) from power+cadence over the last 60 s. |
 | Best 5 s / 1 min / 5 min / 20 min / 60 min power | `mmp_5s` / `mmp_1min` / `mmp_5min` / `mmp_20min` / `mmp_60min` | Highest mean power for that duration seen so far in the ride. |
 | Power W/kg | `watts_per_kg` | Power-to-weight ratio — 3-second smoothed power over rider weight (default 75 kg, override in Rider Settings). |
-| eFTP | `eftp` | Live FTP estimate — 95 % of the best 20-min power so far this ride. |
+| eFTP | `eftp` | Live FTP estimate — 95 % of the best 20-min power so far this ride. Per-ride finals are persisted; the 42-day best shows on the Readiness screen. |
 | VAM | `vam` | Vertical Ascent Meters per hour over the last 60 s of elevation gain. |
 | Optimal cadence | `optimal_cadence` | Within-ride best-efficiency cadence, reported in RPM — bins power+HR by cadence and reports the centre of the bucket with the highest watts-per-beat. Persisted per-ride; rolling mean on the Readiness screen. |
 

@@ -14,6 +14,7 @@ import com.inqulab.heartkaroo.R
 import com.inqulab.heartkaroo.aet.AerobicThresholdStore
 import com.inqulab.heartkaroo.cadence.OptimalCadenceStore
 import com.inqulab.heartkaroo.hrv.PolarBleManager
+import com.inqulab.heartkaroo.power.EftpStore
 import com.inqulab.heartkaroo.settings.RiderSettings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -41,10 +42,12 @@ class ReadinessActivity : AppCompatActivity() {
     private lateinit var store: ReadinessStore
     private lateinit var aetStore: AerobicThresholdStore
     private lateinit var cadenceStore: OptimalCadenceStore
+    private lateinit var eftpStore: EftpStore
     private lateinit var statusView: TextView
     private lateinit var verdictView: TextView
     private lateinit var aetView: TextView
     private lateinit var cadenceView: TextView
+    private lateinit var eftpView: TextView
     private lateinit var startButton: Button
     private var measurementJob: Job? = null
     private var connectionJob: Job? = null
@@ -63,15 +66,18 @@ class ReadinessActivity : AppCompatActivity() {
         store = ReadinessStore(applicationContext)
         aetStore = AerobicThresholdStore(applicationContext)
         cadenceStore = OptimalCadenceStore(applicationContext)
+        eftpStore = EftpStore(applicationContext)
         statusView = findViewById(R.id.readiness_status)
         verdictView = findViewById(R.id.readiness_verdict)
         aetView = findViewById(R.id.readiness_aet)
         cadenceView = findViewById(R.id.readiness_cadence)
+        eftpView = findViewById(R.id.readiness_eftp)
         startButton = findViewById(R.id.readiness_start)
         startButton.setOnClickListener { ensurePermissionsAndStart() }
         renderBaselineSummary()
         renderAetSummary()
         renderCadenceSummary()
+        renderEftpSummary()
     }
 
     private fun renderAetSummary() {
@@ -86,6 +92,13 @@ class ReadinessActivity : AppCompatActivity() {
         val rides = cadenceStore.entries().size
         cadenceView.text = if (rolling == null) getString(R.string.readiness_cadence_none)
         else getString(R.string.readiness_cadence_fmt, rolling.toInt(), rides)
+    }
+
+    private fun renderEftpSummary() {
+        val best = eftpStore.rollingBest()
+        val rides = eftpStore.entries().size
+        eftpView.text = if (best == null) getString(R.string.readiness_eftp_none)
+        else getString(R.string.readiness_eftp_fmt, best.toInt(), rides)
     }
 
     override fun onDestroy() {

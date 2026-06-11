@@ -16,6 +16,7 @@ import com.inqulab.heartkaroo.efficiency.CardiacCostDataType
 import com.inqulab.heartkaroo.efficiency.EfficiencyFactorDataType
 import com.inqulab.heartkaroo.power.CoastingDataType
 import com.inqulab.heartkaroo.power.EftpDataType
+import com.inqulab.heartkaroo.power.EftpStore
 import com.inqulab.heartkaroo.power.IntensityFactorDataType
 import com.inqulab.heartkaroo.power.KilojoulesDataType
 import com.inqulab.heartkaroo.power.MmpDataType
@@ -565,6 +566,12 @@ class HeartKarooExtension : KarooExtension(EXTENSION_ID, "1.0.0") {
             if (shouldPersistRollingFinal(cadenceFinal, cadenceSamples, MIN_CADENCE_SAMPLES_TO_PERSIST)) {
                 OptimalCadenceStore(applicationContext)
                     .record(System.currentTimeMillis(), cadenceFinal!!, cadenceSamples)
+            }
+            // eFTP is non-null only once a full 20-min power window has been
+            // ridden, so that is the quality gate — no sample-count check needed.
+            val eftpFinal = ridePowerEngine.eftp.value
+            if (eftpFinal != null && eftpFinal > 0f) {
+                EftpStore(applicationContext).record(System.currentTimeMillis(), eftpFinal)
             }
         }
     }
