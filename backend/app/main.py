@@ -18,7 +18,7 @@ from fastapi import FastAPI, Header, HTTPException
 from .forecast import build_forecast
 from .intervals import IntervalsClient
 from .models import FitnessSnapshot, Forecast, Plan, Race, RaceDistance, Readiness, SyncResult
-from .planner import build_plan
+from .planner import build_plan, discipline_bias
 from .readiness import compute_readiness
 from .workouts import EVENT_TAG, build_events
 
@@ -70,6 +70,32 @@ def _readiness(athlete_id: str, api_key: str, today: date) -> Readiness:
         wellness = client.wellness(today)
         activities = client.activities(today)
     return compute_readiness(today, wellness, activities)
+
+
+def _athlete_state(athlete_id: str, api_key: str, today: date):
+    """Everything the planner personalises on: readiness, current load (CTL),
+    threshold settings and the discipline bias derived from them."""
+    with _intervals(athlete_id, api_key) as client:
+        wellness = client.wellness(today)
+        activities = client.activities(today)
+        settings = client.sport_settings()
+        weight = client.weight()
+    readiness = compute_readiness(today, wellness, activities)
+    ctl = next((w.ctl for w in reversed(wellness) if w.ctl is not None), None)
+    bias = discipline_bias(
+        ftp=settings["ftp"],
+        weight=weight,
+        run_pace=settings["run_threshold_pace"],
+        swim_pace=settings["swim_threshold_pace"],
+    )
+    return readiness, ctl, settings, bias
+
+
+def _personal_plan(athlete_id: str, api_key: str, today: date):
+    race = _next_race(athlete_id, today)
+    readiness, ctl, settings, bias = _athlete_state(athlete_id, api_key, today)
+    plan = build_plan(race, today, readiness, ctl=ctl, bias=bias)
+    return plan, readiness, ctl, settings
 
 
 def _next_race(athlete_id: str, today: date) -> Race:
@@ -134,11 +160,10 @@ def get_plan(
     x_athlete_id: str = Header(...),
     x_api_key: str = Header(...),
 ) -> Plan:
-    """Plan for the next upcoming race, adjusted by today's readiness."""
-    today = date.today()
-    race = _next_race(x_athlete_id, today)
-    readiness = _readiness(x_athlete_id, x_api_key, today)
-    return build_plan(race, today, readiness)
+    """Plan for the next upcoming race, fitted to the athlete's current load
+    and discipline strengths and adjusted by today's readiness."""
+    plan, _, _, _ = _personal_plan(x_athlete_id, x_api_key, date.today())
+    return plan
 
 
 @app.get("/forecast", response_model=Forecast)
@@ -148,14 +173,7 @@ def get_forecast(
 ) -> Forecast:
     """Projected FTP and threshold pacing at race day, from the planned load."""
     today = date.today()
-    race = _next_race(x_athlete_id, today)
-    with _intervals(x_athlete_id, x_api_key) as client:
-        wellness = client.wellness(today)
-        activities = client.activities(today)
-        settings = client.sport_settings()
-    readiness = compute_readiness(today, wellness, activities)
-    plan = build_plan(race, today, readiness)
-    ctl = next((w.ctl for w in reversed(wellness) if w.ctl is not None), None)
+    plan, readiness, ctl, settings = _personal_plan(x_athlete_id, x_api_key, today)
     current = FitnessSnapshot(day=today, ctl=ctl, **settings)
     return build_forecast(plan, current, readiness.score)
 
@@ -170,9 +188,7 @@ def sync_to_calendar(
     athlete's watch on its day. Previously synced TriPlanner workouts in the
     window are replaced."""
     today = date.today()
-    race = _next_race(x_athlete_id, today)
-    readiness = _readiness(x_athlete_id, x_api_key, today)
-    plan = build_plan(race, today, readiness)
+    plan, _, _, _ = _personal_plan(x_athlete_id, x_api_key, today)
     events = build_events(plan, today, SYNC_HORIZON_DAYS)
     with _intervals(x_athlete_id, x_api_key) as client:
         existing = client.planned_events(today, today + timedelta(days=SYNC_HORIZON_DAYS))

@@ -3,29 +3,13 @@ from datetime import date, timedelta
 from fastapi.testclient import TestClient
 
 from app import main
-from app.models import PerceivedActivity, Readiness, Sport, Wellness
-from app.readiness import compute_readiness
-
-
-def _stub_readiness(athlete_id, api_key, today):
-    wellness = [Wellness(day=today, sleep_hours=8, fatigue=1, soreness=1, stress=1)]
-    activities = [
-        PerceivedActivity(day=today - timedelta(days=1), sport=Sport.RUN, rpe=5, feel=2)
-    ]
-    return compute_readiness(today, wellness, activities)
-
-
-def _client(tmp_path, monkeypatch):
-    monkeypatch.setattr(main, "DB_PATH", tmp_path / "test.db")
-    monkeypatch.setattr(main, "_readiness", _stub_readiness)
-    return TestClient(main.app)
-
+from app.models import PerceivedActivity, Sport, Wellness
 
 HEADERS = {"X-Athlete-Id": "i12345", "X-Api-Key": "secret"}
 
 
 def test_race_crud_and_plan(tmp_path, monkeypatch):
-    client = _client(tmp_path, monkeypatch)
+    client = _client_with_fake(tmp_path, monkeypatch)
 
     assert client.get("/races", headers=HEADERS).json() == []
     assert client.get("/plan", headers=HEADERS).status_code == 404
@@ -73,6 +57,9 @@ class FakeIntervals:
 
     def sport_settings(self):
         return {"ftp": 270.0, "run_threshold_pace": 270.0, "swim_threshold_pace": 105.0}
+
+    def weight(self):
+        return 75.0
 
     def planned_events(self, oldest, newest):
         return [
@@ -131,7 +118,7 @@ def test_forecast_projects_to_race_day(tmp_path, monkeypatch):
 
 
 def test_races_are_scoped_per_athlete(tmp_path, monkeypatch):
-    client = _client(tmp_path, monkeypatch)
+    client = _client_with_fake(tmp_path, monkeypatch)
     race = {
         "name": "Hidden Race",
         "day": (date.today() + timedelta(weeks=8)).isoformat(),

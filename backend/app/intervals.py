@@ -44,6 +44,13 @@ class IntervalsClient:
         resp.raise_for_status()
         return resp.json()
 
+    def weight(self) -> float | None:
+        """Athlete body weight in kg, if set in their profile."""
+        resp = self._client.get(f"/athlete/{self._athlete_id}")
+        resp.raise_for_status()
+        profile = resp.json()
+        return profile.get("weight") or profile.get("icu_weight")
+
     def sport_settings(self) -> dict:
         """Current FTP (W), run threshold pace (s/km) and swim pace (s/100m)."""
         out = {"ftp": None, "run_threshold_pace": None, "swim_threshold_pace": None}

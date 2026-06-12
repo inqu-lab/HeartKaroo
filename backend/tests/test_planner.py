@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 
 from app.models import Adjustment, Phase, Race, RaceDistance, Readiness, Sport
-from app.planner import build_plan
+from app.planner import build_plan, discipline_bias
 from app.readiness import _adjustment_for
 
 TODAY = date(2026, 6, 12)  # a Friday
@@ -93,3 +93,52 @@ def test_race_in_past_rejected():
 
     with pytest.raises(ValueError):
         build_plan(Race(name="x", day=TODAY, distance=RaceDistance.SPRINT), TODAY)
+
+
+def _sport_minutes(plan, week_index):
+    out = {}
+    for s in plan.weeks[week_index].sessions:
+        out[s.sport] = out.get(s.sport, 0) + s.duration_min
+    return out
+
+
+def test_low_ctl_anchors_early_volume_and_ramps_safely():
+    template = build_plan(_race(), TODAY)
+    anchored = build_plan(_race(), TODAY, ctl=20)  # ≈2.8 h/week of current training
+    assert anchored.weeks[0].target_hours < template.weeks[0].target_hours
+    # Every week stays inside the 8%/week ramp envelope from the start volume
+    # (recovery weeks dip below it; the next week may rebound to the envelope).
+    for i, week in enumerate(anchored.weeks[:-1]):  # race week recomputed
+        envelope = 3.0 * 1.08**i
+        assert week.target_hours <= envelope + 0.11  # 0.1 h display rounding
+        assert week.target_hours <= template.weeks[i].target_hours
+    # The plan still reaches template volume once the ramp catches up.
+    assert anchored.weeks[-2].target_hours == template.weeks[-2].target_hours
+
+
+def test_high_ctl_athlete_gets_full_template():
+    template = build_plan(_race(), TODAY)
+    anchored = build_plan(_race(), TODAY, ctl=80)  # ≈11 h/week, above Olympic peak
+    assert [w.target_hours for w in anchored.weeks] == [
+        w.target_hours for w in template.weeks
+    ]
+
+
+def test_weak_swimmer_gets_more_swim_time():
+    bias = discipline_bias(ftp=240, weight=75, run_pace=270, swim_pace=135)
+    assert bias[Sport.SWIM] > 1
+    default = _sport_minutes(build_plan(_race(), TODAY), 1)
+    biased = _sport_minutes(build_plan(_race(), TODAY, bias=bias), 1)
+    assert biased[Sport.SWIM] > default[Sport.SWIM]
+    # Total weekly time is unchanged (within rounding of 5-min sessions).
+    assert abs(sum(biased.values()) - sum(default.values())) <= 10
+
+
+def test_bias_is_capped():
+    bias = discipline_bias(ftp=100, weight=90, run_pace=600, swim_pace=60)
+    assert all(0.88 <= b <= 1.12 for b in bias.values())
+
+
+def test_bias_needs_two_disciplines():
+    assert discipline_bias(run_pace=270) == {}
+    assert discipline_bias(ftp=250, run_pace=270) == {}  # bike needs weight too

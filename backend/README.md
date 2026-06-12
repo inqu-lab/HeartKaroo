@@ -14,8 +14,13 @@ adapts it daily using wellness data and perceived exertion from
 2. **Planner** (`app/planner.py`) — periodizes the weeks from today to race
    day (base → build → peak → taper, recovery every 4th week), scales weekly
    hours to race distance (sprint/olympic/half/full), and lays out
-   swim/bike/run/brick sessions. Today's readiness then adjusts the next
-   ~3 days: lower volume, intensity swapped to aerobic work, or full rest.
+   swim/bike/run/brick sessions. The template is fitted to the athlete:
+   weekly volume starts near their current training load (from CTL) and
+   ramps ≤8%/week until the template catches up, and the swim/bike/run time
+   split shifts up to ±12% toward their weakest discipline (thresholds from
+   intervals.icu sport settings vs. mid-pack references; bike uses W/kg).
+   Today's readiness then adjusts the next ~3 days: lower volume, intensity
+   swapped to aerobic work, or full rest.
 3. **Garmin sync** (`app/workouts.py`) — `POST /sync` pushes the next two
    weeks to the intervals.icu calendar as structured workouts (warm-up /
    repeats with zone targets / cool-down in intervals.icu step syntax).

@@ -4,6 +4,11 @@ Builds weeks from today to race day (base → build → peak → taper, with a
 recovery week every fourth week), distributes swim/bike/run/brick sessions
 across each week, then adjusts the near-term sessions using the athlete's
 readiness — which itself reflects how training has been perceived.
+
+The template is fitted to the athlete two ways: weekly volume is anchored to
+their current training load (CTL) and ramped up at a safe rate instead of
+jumping to template hours, and the swim/bike/run time split is biased toward
+their weakest discipline relative to typical age-group ability.
 """
 
 from __future__ import annotations
@@ -45,6 +50,18 @@ TAPER_WEEKS = {
     RaceDistance.FULL: 3,
 }
 
+# Volume anchoring: CTL ≈ average daily TSS, and mixed triathlon training
+# averages ~50 TSS/hour, so current weekly hours ≈ CTL × 7 / 50.
+HOURS_PER_CTL = 0.14
+WEEKLY_RAMP = 1.08  # max volume growth per week
+MIN_START_HOURS = 3.0
+
+# Discipline weighting: reference thresholds for a mid-pack age-grouper.
+REF_SWIM_PACE = 100.0  # s/100m (1:40)
+REF_RUN_PACE = 270.0  # s/km (4:30)
+REF_BIKE_WKG = 3.2
+MAX_BIAS = 0.12  # cap time shifted toward/away from a discipline
+
 # (sport, weekday 0=Mon, share of weekly hours, intensity, title)
 # Intensity of the quality sessions varies by phase below.
 WEEK_TEMPLATE = [
@@ -78,6 +95,52 @@ def _monday(d: date) -> date:
     return d - timedelta(days=d.weekday())
 
 
+def discipline_bias(
+    ftp: float | None = None,
+    weight: float | None = None,
+    run_pace: float | None = None,  # s/km
+    swim_pace: float | None = None,  # s/100m
+) -> dict[Sport, float]:
+    """Per-sport time multipliers favouring the athlete's weakest discipline.
+
+    Each available threshold is scored against a mid-pack reference (faster /
+    stronger than reference scores above 1). Sports below the athlete's own
+    average get more weekly time, capped at ±MAX_BIAS. Needs at least two
+    disciplines to compare; bike needs body weight for W/kg.
+    """
+    scores: dict[Sport, float] = {}
+    if swim_pace:
+        scores[Sport.SWIM] = REF_SWIM_PACE / swim_pace
+    if run_pace:
+        scores[Sport.RUN] = REF_RUN_PACE / run_pace
+    if ftp and weight:
+        scores[Sport.BIKE] = (ftp / weight) / REF_BIKE_WKG
+    if len(scores) < 2:
+        return {}
+    avg = sum(scores.values()) / len(scores)
+    return {
+        sport: 1 + max(-MAX_BIAS, min(MAX_BIAS, (avg - score) / avg))
+        for sport, score in scores.items()
+    }
+
+
+def _anchored_hours(targets: list[float], ctl: float | None, peak_hours: float) -> list[float]:
+    """Cap each week's template hours by a ramp from the athlete's current load.
+
+    An athlete already training at or above template volume gets the template
+    unchanged; one training less starts near their current weekly hours and
+    grows ≤8% per week until the template catches up.
+    """
+    if ctl is None:
+        return targets
+    ceiling = max(MIN_START_HOURS, ctl * HOURS_PER_CTL)
+    out = []
+    for target in targets:
+        out.append(min(target, ceiling))
+        ceiling = min(peak_hours, ceiling * WEEKLY_RAMP)
+    return out
+
+
 def _phases(n_weeks: int, distance: RaceDistance) -> list[Phase]:
     """Assign a phase to each week, last week ending at the race."""
     taper = min(TAPER_WEEKS[distance], max(1, n_weeks - 1)) if n_weeks > 1 else n_weeks
@@ -96,10 +159,21 @@ def _phases(n_weeks: int, distance: RaceDistance) -> list[Phase]:
     return phases
 
 
-def _sessions_for_week(monday: date, phase: Phase, hours: float, today: date) -> list[Session]:
+def _sessions_for_week(
+    monday: date,
+    phase: Phase,
+    hours: float,
+    today: date,
+    bias: dict[Sport, float] | None = None,
+) -> list[Session]:
     sessions = []
     quality_intensity = QUALITY_BY_PHASE[phase]
-    for sport, weekday, share, kind, title in WEEK_TEMPLATE:
+    bias = bias or {}
+    # Reweight shares toward weaker disciplines, keeping total hours unchanged.
+    weighted = [share * bias.get(sport, 1.0) for sport, _, share, _, _ in WEEK_TEMPLATE]
+    scale = sum(share for _, _, share, _, _ in WEEK_TEMPLATE) / sum(weighted)
+    for (sport, weekday, _, kind, title), share in zip(WEEK_TEMPLATE, weighted):
+        share *= scale
         day = monday + timedelta(days=weekday)
         if day < today:
             continue
@@ -200,7 +274,13 @@ def _apply_readiness(sessions: list[Session], readiness: Readiness, today: date)
             )
 
 
-def build_plan(race: Race, today: date, readiness: Readiness | None = None) -> Plan:
+def build_plan(
+    race: Race,
+    today: date,
+    readiness: Readiness | None = None,
+    ctl: float | None = None,
+    bias: dict[Sport, float] | None = None,
+) -> Plan:
     if race.day <= today:
         raise ValueError("Race date must be in the future")
 
@@ -209,17 +289,19 @@ def build_plan(race: Race, today: date, readiness: Readiness | None = None) -> P
     n_weeks = (race_monday - first_monday).days // 7 + 1
     phases = _phases(n_weeks, race.distance)
     peak_hours = PEAK_HOURS[race.distance]
+    targets = [peak_hours * PHASE_HOURS_FACTOR[p] for p in phases]
+    anchored = _anchored_hours(targets, ctl, peak_hours)
 
     weeks = []
     for i in range(n_weeks):
         monday = first_monday + timedelta(weeks=i)
         phase = phases[i]
-        hours = peak_hours * PHASE_HOURS_FACTOR[phase]
+        hours = anchored[i]
         if monday == race_monday:
             sessions = _race_week_sessions(monday, race, hours, today)
             hours = sum(s.duration_min for s in sessions) / 60
         else:
-            sessions = _sessions_for_week(monday, phase, hours, today)
+            sessions = _sessions_for_week(monday, phase, hours, today, bias)
         weeks.append(
             WeekPlan(start=monday, phase=phase, target_hours=round(hours, 1), sessions=sessions)
         )
