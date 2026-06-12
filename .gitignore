@@ -34,3 +34,13 @@ replay_pid*
 
 # Kotlin Gradle plugin data, see https://kotlinlang.org/docs/whatsnew20.html#new-directory-for-kotlin-data-in-gradle-projects
 .kotlin/
+
+# TriPlanner backend (Python)
+__pycache__/
+.pytest_cache/
+backend/triplanner.db
+
+# TriPlanner iOS (Xcode project is generated with XcodeGen)
+ios/TriPlanner/TriPlanner.xcodeproj/
+xcuserdata/
+DerivedData/
