@@ -44,6 +44,15 @@ struct Race: Codable, Identifiable, Hashable {
 
     // Stable identity for SwiftUI lists even before the backend assigns an id.
     var listID: String { id.map(String.init) ?? "\(name)-\(day)" }
+
+    var daysToGo: Int? {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        guard let raceDay = formatter.date(from: day) else { return nil }
+        return Calendar.current.dateComponents(
+            [.day], from: Calendar.current.startOfDay(for: .now), to: raceDay
+        ).day
+    }
 }
 
 struct Readiness: Codable {

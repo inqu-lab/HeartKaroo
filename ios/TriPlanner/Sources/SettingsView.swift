@@ -38,6 +38,8 @@ struct SettingsView: View {
                         .foregroundStyle(.green)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Theme.background)
             .navigationTitle("Settings")
         }
     }
