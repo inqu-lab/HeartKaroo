@@ -108,6 +108,50 @@ struct WeekPlan: Codable, Identifiable {
     }
 }
 
+struct FitnessSnapshot: Codable {
+    var day: String
+    var ftp: Double?
+    var runThresholdPace: Double?  // seconds per km
+    var swimThresholdPace: Double?  // seconds per 100m
+    var ctl: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case day, ftp, ctl
+        case runThresholdPace = "run_threshold_pace"
+        case swimThresholdPace = "swim_threshold_pace"
+    }
+}
+
+struct Forecast: Codable {
+    var race: Race
+    var current: FitnessSnapshot
+    var raceDay: FitnessSnapshot
+    var weekly: [FitnessSnapshot]
+    var explanation: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case race, current, weekly, explanation
+        case raceDay = "race_day"
+    }
+}
+
+struct SyncResult: Codable {
+    var created: Int
+    var deleted: Int
+    var horizonDays: Int
+
+    enum CodingKeys: String, CodingKey {
+        case created, deleted
+        case horizonDays = "horizon_days"
+    }
+}
+
+/// "4:30 /km" or "1:45 /100m" from seconds.
+func formatPace(_ seconds: Double, unit: String) -> String {
+    let total = Int(seconds.rounded())
+    return String(format: "%d:%02d %@", total / 60, total % 60, unit)
+}
+
 struct Plan: Codable {
     var race: Race
     var generatedOn: String

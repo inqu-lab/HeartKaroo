@@ -110,3 +110,27 @@ class Plan(BaseModel):
     generated_on: date
     readiness: Optional[Readiness] = None
     weeks: list[WeekPlan]
+
+
+class FitnessSnapshot(BaseModel):
+    """Projected (or current) fitness markers on a given day."""
+
+    day: date
+    ftp: Optional[float] = None  # watts
+    run_threshold_pace: Optional[float] = None  # seconds per km
+    swim_threshold_pace: Optional[float] = None  # seconds per 100m
+    ctl: Optional[float] = None
+
+
+class Forecast(BaseModel):
+    race: Race
+    current: FitnessSnapshot
+    race_day: FitnessSnapshot
+    weekly: list[FitnessSnapshot]
+    explanation: list[str] = []
+
+
+class SyncResult(BaseModel):
+    created: int
+    deleted: int
+    horizon_days: int

@@ -44,6 +44,32 @@ class IntervalsClient:
         resp.raise_for_status()
         return resp.json()
 
+    def sport_settings(self) -> dict:
+        """Current FTP (W), run threshold pace (s/km) and swim pace (s/100m)."""
+        out = {"ftp": None, "run_threshold_pace": None, "swim_threshold_pace": None}
+        for setting in self._get("/sport-settings"):
+            types = setting.get("types") or []
+            pace = setting.get("threshold_pace")  # m/s
+            if "Ride" in types and setting.get("ftp"):
+                out["ftp"] = setting["ftp"]
+            if "Run" in types and pace:
+                out["run_threshold_pace"] = 1000 / pace
+            if "Swim" in types and pace:
+                out["swim_threshold_pace"] = 100 / pace
+        return out
+
+    def planned_events(self, oldest: date, newest: date) -> list[dict]:
+        return self._get("/events", oldest=oldest.isoformat(), newest=newest.isoformat())
+
+    def create_event(self, event: dict) -> dict:
+        resp = self._client.post(f"/athlete/{self._athlete_id}/events", json=event)
+        resp.raise_for_status()
+        return resp.json()
+
+    def delete_event(self, event_id: int) -> None:
+        resp = self._client.delete(f"/athlete/{self._athlete_id}/events/{event_id}")
+        resp.raise_for_status()
+
     def wellness(self, today: date, days: int = 35) -> list[Wellness]:
         rows = self._get(
             "/wellness",

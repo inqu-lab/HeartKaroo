@@ -16,7 +16,20 @@ adapts it daily using wellness data and perceived exertion from
    hours to race distance (sprint/olympic/half/full), and lays out
    swim/bike/run/brick sessions. Today's readiness then adjusts the next
    ~3 days: lower volume, intensity swapped to aerobic work, or full rest.
-3. **API** (`app/main.py`) — the iPhone app sends the athlete's intervals.icu
+3. **Garmin sync** (`app/workouts.py`) — `POST /sync` pushes the next two
+   weeks to the intervals.icu calendar as structured workouts (warm-up /
+   repeats with zone targets / cool-down in intervals.icu step syntax).
+   With the athlete's Garmin connected to intervals.icu, each workout lands
+   on the watch on its day and can be followed step-by-step. Bricks become
+   two back-to-back events (bike, then run). Re-syncing replaces previously
+   synced TriPlanner workouts, so readiness adjustments propagate.
+4. **Forecast** (`app/forecast.py`) — `GET /forecast` simulates CTL/ATL over
+   the *planned* load to race day and maps fitness gained to performance:
+   projected FTP (~0.35% per CTL point, scaled by how well training is being
+   absorbed per today's readiness, plus a taper-freshness bonus), with run
+   threshold pace improving at ~60% and swim pace at ~40% of the relative
+   FTP gain. Current FTP/paces come from intervals.icu sport settings.
+5. **API** (`app/main.py`) — the iPhone app sends the athlete's intervals.icu
    credentials in headers (`X-Athlete-Id`, `X-Api-Key`); the backend stores
    only the race list (SQLite).
 
@@ -26,6 +39,8 @@ adapts it daily using wellness data and perceived exertion from
 |---|---|---|
 | GET | `/readiness` | Today's readiness score with per-component breakdown |
 | GET | `/plan` | Full plan to the next race, readiness-adjusted |
+| GET | `/forecast` | Projected FTP and run/swim pacing at race day |
+| POST | `/sync` | Push the next two weeks to intervals.icu → Garmin |
 | GET/POST | `/races` | List / add races |
 | DELETE | `/races/{id}` | Remove a race |
 

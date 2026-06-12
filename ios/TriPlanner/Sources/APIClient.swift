@@ -58,6 +58,14 @@ struct APIClient {
         try await send(request("plan"))
     }
 
+    func forecast() async throws -> Forecast {
+        try await send(request("forecast"))
+    }
+
+    func syncToCalendar() async throws -> SyncResult {
+        try await send(request("sync", method: "POST"))
+    }
+
     func races() async throws -> [Race] {
         try await send(request("races"))
     }

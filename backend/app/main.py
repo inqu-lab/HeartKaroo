@@ -8,17 +8,21 @@ except the race list, held in a small SQLite file.
 from __future__ import annotations
 
 import sqlite3
-from contextlib import closing
-from datetime import date
+from contextlib import closing, contextmanager
+from datetime import date, timedelta
 from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, Header, HTTPException
 
+from .forecast import build_forecast
 from .intervals import IntervalsClient
-from .models import Plan, Race, RaceDistance, Readiness
+from .models import FitnessSnapshot, Forecast, Plan, Race, RaceDistance, Readiness, SyncResult
 from .planner import build_plan
 from .readiness import compute_readiness
+from .workouts import EVENT_TAG, build_events
+
+SYNC_HORIZON_DAYS = 14
 
 DB_PATH = Path(__file__).resolve().parent.parent / "triplanner.db"
 
@@ -44,11 +48,12 @@ def _client(athlete_id: str, api_key: str) -> IntervalsClient:
     return IntervalsClient(athlete_id, api_key)
 
 
-def _readiness(athlete_id: str, api_key: str, today: date) -> Readiness:
+@contextmanager
+def _intervals(athlete_id: str, api_key: str):
+    """Client with intervals.icu errors translated to HTTP errors."""
     client = _client(athlete_id, api_key)
     try:
-        wellness = client.wellness(today)
-        activities = client.activities(today)
+        yield client
     except httpx.HTTPStatusError as e:
         raise HTTPException(
             status_code=e.response.status_code,
@@ -58,7 +63,20 @@ def _readiness(athlete_id: str, api_key: str, today: date) -> Readiness:
         raise HTTPException(status_code=502, detail=f"intervals.icu unreachable: {e}")
     finally:
         client.close()
+
+
+def _readiness(athlete_id: str, api_key: str, today: date) -> Readiness:
+    with _intervals(athlete_id, api_key) as client:
+        wellness = client.wellness(today)
+        activities = client.activities(today)
     return compute_readiness(today, wellness, activities)
+
+
+def _next_race(athlete_id: str, today: date) -> Race:
+    races = [r for r in list_races(athlete_id) if r.day > today]
+    if not races:
+        raise HTTPException(status_code=404, detail="No upcoming race — add one first")
+    return races[0]
 
 
 @app.get("/health")
@@ -118,8 +136,51 @@ def get_plan(
 ) -> Plan:
     """Plan for the next upcoming race, adjusted by today's readiness."""
     today = date.today()
-    races = [r for r in list_races(x_athlete_id) if r.day > today]
-    if not races:
-        raise HTTPException(status_code=404, detail="No upcoming race — add one first")
+    race = _next_race(x_athlete_id, today)
     readiness = _readiness(x_athlete_id, x_api_key, today)
-    return build_plan(races[0], today, readiness)
+    return build_plan(race, today, readiness)
+
+
+@app.get("/forecast", response_model=Forecast)
+def get_forecast(
+    x_athlete_id: str = Header(...),
+    x_api_key: str = Header(...),
+) -> Forecast:
+    """Projected FTP and threshold pacing at race day, from the planned load."""
+    today = date.today()
+    race = _next_race(x_athlete_id, today)
+    with _intervals(x_athlete_id, x_api_key) as client:
+        wellness = client.wellness(today)
+        activities = client.activities(today)
+        settings = client.sport_settings()
+    readiness = compute_readiness(today, wellness, activities)
+    plan = build_plan(race, today, readiness)
+    ctl = next((w.ctl for w in reversed(wellness) if w.ctl is not None), None)
+    current = FitnessSnapshot(day=today, ctl=ctl, **settings)
+    return build_forecast(plan, current, readiness.score)
+
+
+@app.post("/sync", response_model=SyncResult)
+def sync_to_calendar(
+    x_athlete_id: str = Header(...),
+    x_api_key: str = Header(...),
+) -> SyncResult:
+    """Push the next two weeks to the intervals.icu calendar as structured
+    workouts. intervals.icu's Garmin integration then sends each one to the
+    athlete's watch on its day. Previously synced TriPlanner workouts in the
+    window are replaced."""
+    today = date.today()
+    race = _next_race(x_athlete_id, today)
+    readiness = _readiness(x_athlete_id, x_api_key, today)
+    plan = build_plan(race, today, readiness)
+    events = build_events(plan, today, SYNC_HORIZON_DAYS)
+    with _intervals(x_athlete_id, x_api_key) as client:
+        existing = client.planned_events(today, today + timedelta(days=SYNC_HORIZON_DAYS))
+        deleted = 0
+        for event in existing:
+            if (event.get("external_id") or "").startswith(EVENT_TAG):
+                client.delete_event(event["id"])
+                deleted += 1
+        for event in events:
+            client.create_event(event)
+    return SyncResult(created=len(events), deleted=deleted, horizon_days=SYNC_HORIZON_DAYS)

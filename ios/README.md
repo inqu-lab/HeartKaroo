@@ -10,7 +10,11 @@ wellness data and how your recent training felt.
   resting HR, sleep, subjective wellness, perceived training) and today's
   sessions, flagged when they've been reduced/swapped/rested for readiness.
 - **Plan** — every week from now to race day with phase, target hours and
-  the session list.
+  the session list. At the top: a forecast card charting projected FTP to
+  race day with run/swim pacing predictions, and a "Send workouts to
+  Garmin" button that pushes the next two weeks to the intervals.icu
+  calendar as structured workouts (intervals.icu's Garmin integration puts
+  them on the watch).
 - **Races** — add/remove upcoming races (sprint/olympic/half/full, A/B/C
   priority). The plan targets the next upcoming race.
 - **Settings** — backend URL, intervals.icu athlete ID and API key (key is

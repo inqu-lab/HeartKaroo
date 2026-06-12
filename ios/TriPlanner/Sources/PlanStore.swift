@@ -4,8 +4,11 @@ import Foundation
 final class PlanStore: ObservableObject {
     @Published var plan: Plan?
     @Published var readiness: Readiness?
+    @Published var forecast: Forecast?
     @Published var races: [Race] = []
     @Published var isLoading = false
+    @Published var isSyncing = false
+    @Published var syncMessage: String?
     @Published var errorMessage: String?
 
     func refresh() async {
@@ -16,9 +19,24 @@ final class PlanStore: ObservableObject {
             let client = try APIClient.fromSettings()
             races = try await client.races()
             readiness = try await client.readiness()
-            plan = races.isEmpty ? nil : (try? await client.plan())  // 404 when no future race
+            // 404 when no future race
+            plan = races.isEmpty ? nil : (try? await client.plan())
+            forecast = plan == nil ? nil : (try? await client.forecast())
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    func syncToCalendar() async {
+        isSyncing = true
+        syncMessage = nil
+        defer { isSyncing = false }
+        do {
+            let client = try APIClient.fromSettings()
+            let result = try await client.syncToCalendar()
+            syncMessage = "\(result.created) workouts sent for the next \(result.horizonDays) days"
+        } catch {
+            syncMessage = error.localizedDescription
         }
     }
 
